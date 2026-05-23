@@ -398,6 +398,29 @@ def load_agent_section_briefs(
     ]
 
 
+def load_situation_analysis_briefs(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+) -> list[dict[str, Any]]:
+    try:
+        payload = query_reporting_objects(
+            run_dir,
+            object_kind="situation-analysis-brief",
+            run_id=run_id,
+            round_id=round_id,
+            limit=20,
+        )
+    except Exception:
+        return []
+    return [
+        item
+        for item in list_items(payload.get("objects"))
+        if isinstance(item, dict)
+    ]
+
+
 def write_json_file(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -1483,6 +1506,11 @@ def materialize_reporting_handoff_skill(
         run_id=run_id,
         round_id=basis_round_id,
     )
+    situation_analysis_briefs = load_situation_analysis_briefs(
+        run_dir_path,
+        run_id=run_id,
+        round_id=basis_round_id,
+    )
     interaction_section_briefs = build_interaction_section_briefs(interaction_timeline_context)
     section_briefs = [*agent_section_briefs, *interaction_section_briefs]
     supporting_proposal_ids = unique_texts(
@@ -1618,6 +1646,47 @@ def materialize_reporting_handoff_skill(
             "do not create a parallel report path or replace frozen/reporting basis."
         ),
     }
+    report_packet["situation_analysis_briefs"] = situation_analysis_briefs
+    report_packet["situation_analysis_brief_policy"] = {
+        "source": "db-situation-analysis-briefs",
+        "present": bool(situation_analysis_briefs),
+        "brief_count": len(situation_analysis_briefs),
+        "recommended_before_narrative": True,
+        "missing_next_skill": ""
+        if situation_analysis_briefs
+        else "materialize-situation-analysis-brief",
+        "advisory_semantics": (
+            "Situation-analysis briefs organize already-carried materials into "
+            "a report spine. They are not new data sources, investigation rounds, "
+            "runtime gates, fact generators, or evidence acceptance decisions."
+        ),
+    }
+    if not situation_analysis_briefs:
+        warnings.append(
+            {
+                "code": "situation-analysis-brief-missing-before-narrative",
+                "message": (
+                    "No situation-analysis brief is present in the reporting "
+                    "handoff. Materialize one before narrative drafting so the "
+                    "report has a mission-answering analysis spine; this warning "
+                    "does not change runtime gate status."
+                ),
+            }
+        )
+    next_skills = (
+        ["draft-expert-report", "draft-council-decision"]
+        if reporting_ready
+        else [
+            "draft-expert-report",
+            "draft-council-decision",
+            "submit-finding-record",
+            "submit-evidence-bundle",
+            "submit-council-proposal",
+            "submit-readiness-opinion",
+        ]
+    )
+    if not situation_analysis_briefs:
+        next_skills = ["materialize-situation-analysis-brief", *next_skills]
     board_excerpt = excerpt_text(board_brief_text)
     handoff_id = "reporting-handoff-" + stable_hash(run_id, round_id, handoff_status, report_basis_status)[:12]
 
@@ -1697,6 +1766,8 @@ def materialize_reporting_handoff_skill(
         "agent_section_brief_count": len(agent_section_briefs),
         "derived_interaction_section_brief_count": len(interaction_section_briefs),
         "section_briefs": section_briefs,
+        "situation_analysis_brief_count": len(situation_analysis_briefs),
+        "situation_analysis_briefs": situation_analysis_briefs,
         "challenger_constraint_count": len(
             list_items(report_basis_freeze.get("challenger_constraints"))
         )
@@ -1777,6 +1848,7 @@ def materialize_reporting_handoff_skill(
             "council_investigation_program_count": len(council_programs),
             "agent_section_brief_count": len(agent_section_briefs),
             "derived_interaction_section_brief_count": len(interaction_section_briefs),
+            "situation_analysis_brief_count": len(situation_analysis_briefs),
             "unresolved_challenger_constraint_count": len(
                 unresolved_challenger_constraints
             ),
@@ -1808,7 +1880,7 @@ def materialize_reporting_handoff_skill(
                 + (reporting_blocker_hints if not reporting_ready else [])
             )[:3] if not reporting_ready else [],
             "challenge_hints": [item.get("summary", "") for item in open_risks[:2] if maybe_text(item.get("summary"))],
-            "suggested_next_skills": ["draft-expert-report", "draft-council-decision"] if reporting_ready else ["draft-expert-report", "draft-council-decision", "submit-finding-record", "submit-evidence-bundle", "submit-council-proposal", "submit-readiness-opinion"],
+            "suggested_next_skills": unique_texts(next_skills),
         },
     }
 

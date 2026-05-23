@@ -223,6 +223,7 @@ DELIBERATION_WRITE_SKILLS = {
     "submit-investigation-plan": "coordination-plan-write",
     "submit-investigation-scope": "coordination-scope-write",
     "submit-round-brief": "coordination-brief-write",
+    "synthesize-dossier-program": "coordination-dossier-program-write",
     "materialize-context-packet": "coordination-context-packet-write",
     "submit-evidence-request": "coordination-evidence-request-write",
     "submit-evidence-route-assessment": "coordination-route-assessment-write",

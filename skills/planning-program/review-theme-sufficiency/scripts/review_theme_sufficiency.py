@@ -6,9 +6,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sqlite3
 import sys
-from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -103,6 +103,19 @@ def unique_texts(values: list[Any]) -> list[str]:
     return [maybe_text(value) for value in unique_values(values) if maybe_text(value)]
 
 
+def safe_id_fragment(value: Any) -> str:
+    text = maybe_text(value).casefold()
+    chars = [char if char.isalnum() else "-" for char in text]
+    fragment = "-".join(part for part in "".join(chars).split("-") if part)
+    return fragment[:64] or "theme"
+
+
+def supplemental_target_round_id(round_id: str, theme_id: str) -> str:
+    match = re.match(r"^(round-\d{3})(?:-|$)", maybe_text(round_id))
+    prefix = match.group(1) if match else "round-002"
+    return f"{prefix}-supplemental-{safe_id_fragment(theme_id)}"
+
+
 def load_blueprint(run_dir: Path, round_id: str) -> dict[str, Any]:
     return load_json(run_dir / "reporting" / f"report_blueprint_{round_id}.json")
 
@@ -169,10 +182,9 @@ def filter_active_themes(
 def signal_counts(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, Any]:
     db_path = run_dir / "analytics" / "signal_plane.sqlite"
     counts = {"environment": 0, "formal": 0, "public": 0}
-    source_skill_counts: Counter[str] = Counter()
     evidence_refs: list[str] = []
     if not db_path.exists():
-        return {"plane_counts": counts, "source_skill_counts": [], "evidence_refs": []}
+        return {"plane_counts": counts, "evidence_refs": []}
     connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
     try:
@@ -180,10 +192,10 @@ def signal_counts(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, Any
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'normalized_signals'"
         ).fetchone()
         if present is None:
-            return {"plane_counts": counts, "source_skill_counts": [], "evidence_refs": []}
+            return {"plane_counts": counts, "evidence_refs": []}
         rows = connection.execute(
             """
-            SELECT signal_id, plane, source_skill
+            SELECT signal_id, plane
             FROM normalized_signals
             WHERE run_id = ? AND round_id = ?
             """,
@@ -195,16 +207,11 @@ def signal_counts(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, Any
         plane = maybe_text(row["plane"])
         if plane in counts:
             counts[plane] += 1
-        source_skill_counts[maybe_text(row["source_skill"])] += 1
         signal_id = maybe_text(row["signal_id"])
         if signal_id:
             evidence_refs.append(f"signal:{signal_id}")
     return {
         "plane_counts": counts,
-        "source_skill_counts": [
-            {"source_skill": skill, "signal_count": count}
-            for skill, count in sorted(source_skill_counts.items())
-        ],
         "evidence_refs": evidence_refs,
     }
 
@@ -528,9 +535,17 @@ def theme_progress_review(
                     "progress-review",
                     "moderator-synthesis",
                 ],
+                "suggested_target_round_id": supplemental_target_round_id(
+                    round_id,
+                    theme_id,
+                ),
                 "transition_payload_suggestion": {
                     "program_id": resolved_program_id,
                     "source_round_id": round_id,
+                    "suggested_target_round_id": supplemental_target_round_id(
+                        round_id,
+                        theme_id,
+                    ),
                     "active_theme_ids": [theme_id],
                     "primary_focus_refs": unique_texts(
                         [
@@ -610,6 +625,85 @@ def theme_progress_review(
     return validate_canonical_payload("theme-progress-review", review)
 
 
+def supplemental_recommendations(
+    progress_reviews: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    recommendations: list[dict[str, Any]] = []
+    for review in progress_reviews:
+        if not isinstance(review, dict):
+            continue
+        if maybe_text(review.get("recommended_disposition")) != "needs-supplemental-round":
+            continue
+        for recommendation in list_items(review.get("supplemental_round_recommendation")):
+            if not isinstance(recommendation, dict):
+                continue
+            recommendations.append(
+                {
+                    **recommendation,
+                    "parent_theme_progress_review_id": maybe_text(review.get("review_id")),
+                    "recommended_disposition": maybe_text(
+                        review.get("recommended_disposition")
+                    ),
+                    "advisory_only": True,
+                    "requires_council_or_report_basis_uptake": True,
+                    "requires_transition_approval": True,
+                }
+            )
+    return unique_values(recommendations)
+
+
+def supplemental_transition_payload_suggestions(
+    recommendations: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    suggestions: list[dict[str, Any]] = []
+    for recommendation in recommendations:
+        payload = recommendation.get("transition_payload_suggestion")
+        if not isinstance(payload, dict):
+            continue
+        suggestions.append(
+            {
+                **payload,
+                "parent_theme_progress_review_refs": unique_texts(
+                    [
+                        *list_items(payload.get("parent_theme_progress_review_refs")),
+                        maybe_text(recommendation.get("parent_theme_progress_review_id")),
+                    ]
+                ),
+                "advisory_only": True,
+                "requires_council_or_report_basis_uptake": True,
+                "requires_transition_approval": True,
+                "does_not_open_round": True,
+            }
+        )
+    return unique_values(suggestions)
+
+
+def supplemental_transition_request_templates(
+    suggestions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    templates: list[dict[str, Any]] = []
+    for suggestion in suggestions:
+        target_round_id = maybe_text(suggestion.get("suggested_target_round_id"))
+        source_round_id = maybe_text(suggestion.get("source_round_id"))
+        if not target_round_id or not source_round_id:
+            continue
+        templates.append(
+            {
+                "transition_kind": "open-investigation-round",
+                "source_round_id": source_round_id,
+                "target_round_id": target_round_id,
+                "request_payload": suggestion,
+                "policy": {
+                    "advisory_only": True,
+                    "moderator_must_request_transition": True,
+                    "runtime_operator_must_approve": True,
+                    "does_not_auto_execute": True,
+                },
+            }
+        )
+    return unique_values(templates)
+
+
 def review_theme_sufficiency(args: argparse.Namespace) -> dict[str, Any]:
     run_dir = resolve_run_dir(args.run_dir)
     output_file = resolve_path(run_dir, args.output_path, f"analytics/theme_sufficiency_review_{args.round_id}.json")
@@ -687,6 +781,13 @@ def review_theme_sufficiency(args: argparse.Namespace) -> dict[str, Any]:
         stored_review = dict_items(append_result.get("object"))
         stored_progress_reviews.append(stored_review or review)
     progress_reviews = stored_progress_reviews
+    supplemental_round_recommendations = supplemental_recommendations(progress_reviews)
+    supplemental_transition_suggestions = supplemental_transition_payload_suggestions(
+        supplemental_round_recommendations
+    )
+    supplemental_transition_templates = supplemental_transition_request_templates(
+        supplemental_transition_suggestions
+    )
     wrapper = {
         "schema_version": "theme-sufficiency-review-materialization-v1",
         "skill": SKILL_NAME,
@@ -699,6 +800,10 @@ def review_theme_sufficiency(args: argparse.Namespace) -> dict[str, Any]:
         "status": "completed",
         "theme_sufficiency_reviews": reviews,
         "theme_progress_reviews": progress_reviews,
+        "supplemental_round_recommendations": supplemental_round_recommendations,
+        "supplemental_recommendation_count": len(supplemental_round_recommendations),
+        "supplemental_transition_payload_suggestions": supplemental_transition_suggestions,
+        "supplemental_transition_request_templates": supplemental_transition_templates,
         "supported_claim_slots": unique_texts([slot for review in reviews for slot in list_items(review.get("supported_claim_slots"))]),
         "unsupported_claim_slots": unique_texts([slot for review in reviews for slot in list_items(review.get("unsupported_claim_slots"))]),
         "valid_denominators": unique_values([item for review in reviews for item in list_items(review.get("valid_denominators"))]),
@@ -710,6 +815,8 @@ def review_theme_sufficiency(args: argparse.Namespace) -> dict[str, Any]:
             "requires_council_or_report_basis_uptake": True,
             "does_not_open_supplemental_round": True,
             "ordinary_query_repair_stays_in_round": True,
+            "supplemental_recommendations_are_advisory_only": True,
+            "supplemental_transition_requires_request_and_operator_approval": True,
         },
         "review_filter_context": {
             "signal_scope": "run_id+round_id",
@@ -741,6 +848,7 @@ def review_theme_sufficiency(args: argparse.Namespace) -> dict[str, Any]:
             "review_count": len(reviews),
             "progress_review_count": len(progress_reviews),
             "unsupported_claim_slot_count": len(wrapper["unsupported_claim_slots"]),
+            "supplemental_recommendation_count": len(supplemental_round_recommendations),
         },
         "receipt_id": "theme-sufficiency-review-receipt-" + stable_hash(args.run_id, args.round_id, output_file)[:20],
         "artifact_refs": wrapper["artifact_refs"],
@@ -750,17 +858,39 @@ def review_theme_sufficiency(args: argparse.Namespace) -> dict[str, Any]:
         ],
         "warnings": [],
         "board_handoff": {
-            "candidate_ids": [maybe_text(item.get("review_id")) for item in reviews],
+            "candidate_ids": unique_texts(
+                [
+                    *[maybe_text(item.get("review_id")) for item in reviews],
+                    *[maybe_text(item.get("review_id")) for item in progress_reviews],
+                    *[
+                        maybe_text(item.get("suggested_target_round_id"))
+                        for item in supplemental_transition_suggestions
+                    ],
+                ]
+            ),
             "theme_progress_review_ids": [
                 maybe_text(item.get("review_id")) for item in progress_reviews
             ],
+            "supplemental_round_recommendations": supplemental_round_recommendations,
+            "supplemental_transition_payload_suggestions": supplemental_transition_suggestions,
+            "supplemental_transition_request_templates": supplemental_transition_templates,
+            "supplemental_recommendation_policy": {
+                "advisory_only": True,
+                "does_not_open_round": True,
+                "requires_council_or_report_basis_uptake": True,
+                "requires_transition_approval": True,
+            },
             "gap_hints": [
                 maybe_text(item.get("downgrade"))
                 for review in reviews
                 for item in list_items(review.get("required_downgrades"))
                 if isinstance(item, dict)
             ],
-            "suggested_next_skills": [],
+            "suggested_next_skills": (
+                ["request-phase-transition", "open-investigation-round"]
+                if supplemental_transition_suggestions
+                else []
+            ),
         },
     }
 

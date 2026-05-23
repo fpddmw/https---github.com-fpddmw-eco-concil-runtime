@@ -266,7 +266,7 @@
 3. brief 对每个强一点的结论给出 basis refs 或 section brief refs。
 4. brief 明确列出不能写的升级表述，例如代表性公众比例、GDELT tone 等同公众情绪、公共来源叙事等同物理归因、政策有效性因果断言。
 5. brief 不新增事实，不重读 helper artifact 来绕过 report basis，不把 optional-analysis 结果直接提升为报告结论。
-6. narrative report 应优先消费该 brief；如果 handoff 中没有 situation-analysis brief，validator 应标记为 `missing-situation-analysis-brief` 或等价 warning，除非报告类型明确不是形势分析。
+6. narrative report 应优先消费该 brief；如果 handoff 中没有 situation-analysis brief，或 brief 只挂在 `source_material` 里但正文没有可见承接其 mission answer / recommended spine，validator 应标记为 `missing-situation-analysis-brief`、`situation-analysis-brief-not-consumed` 或等价 warning，除非报告类型明确不是形势分析。
 
 ### 4.7 Skill taxonomy and directory layout
 
@@ -435,7 +435,7 @@
 3. policy / official action lane 缺失时，报告只能写缺口、source-limit 或后续评估维度，不能写政策有效性结论。
 4. interaction claim 必须能回溯到 fact/policy/public 至少两类 refs 和 timeline node summary。
 5. 强 claim、政策评估、公众比例、因果/归因表述必须能看到 challenger 的边界审查痕迹；否则 validator 或 handoff 应标记为 unsupported / downgrade-required。
-6. 形势分析报告若缺少 situation-analysis brief，或报告正文把互动/舆情只作为附录堆叠，validator 应给出 blocking issue 或 high-severity warning。
+6. 形势分析报告若缺少 situation-analysis brief、没有在正文中消费其 mission answer / recommended spine，或把互动/舆情只作为附录堆叠，validator 应给出 blocking issue 或 high-severity warning。
 7. report Markdown 不得残留“报告应写出”“本节应说明”等指令语，不得出现未完成 bullet 或只有 `see JSON` 的审计尾巴。
 
 ### Phase 7: Skill Registry 和目录治理
@@ -456,21 +456,21 @@
 4. 没有因为移动目录破坏现有脚本路径、agent config 路径或 skill policy。
 5. 物理目录迁移不是 Phase 2-6 的 blocker；program-aware council 最小闭环可先依赖 metadata / manifest。
 
-### Phase 8: 回归和真实 run 验收
+### Phase 8: 回归和非生产验收
 
 任务：
 
 1. 单元测试覆盖 program contract、round brief payload、source precommitment rejection、implicit scheduler field rejection、responsibility-boundary validation、supplemental transition context、theme progress review disposition。
 2. 做 NYC smoke 旧 run report-chain backtest，验证报告缺口被明确指出。
-3. 新建 fresh run，先跑到 `round-001-framing-scope` 结束并停在正式调查前，人工验收 program 拆分。
-4. 验收通过后再挂机跑完整 run。
+3. 使用临时目录和 fixture/smoke harness 模拟 fresh framing，跑到 `round-001-framing-scope` 结束并停在正式调查前，人工验收 program 拆分。
+4. 不以生产方式运行真实议会，不挂机跑完整真实 run。报告链验收使用 fixture/backtest/smoke harness 构造已冻结 basis、agent section brief、situation-analysis brief、handoff、narrative 和 validator 路径。
 
 验收：
 
 1. 新 framing 输出不再只是“事实/政策/公众/互动”粗分，而是具体规划后续 issue questions、issue council rounds、internal acquisition/analysis turns、supplemental policy 和 agent responsibility boundaries。
 2. 不出现 moderator/report-editor 预填 source family 或 query route 的问题。
-3. full run 在 report-writing 前生成 situation-analysis brief，并能从其中追踪报告主线、事件阶段、互动分析和降级边界。
-4. full run 报告具备事实核查、舆情/政策语义主线、互动时间线和政策评估依据边界。
+3. 非生产报告链 harness 在 report-writing 前生成 situation-analysis brief，并能从其中追踪报告主线、事件阶段、互动分析和降级边界。
+4. 非生产报告链 harness 生成的报告具备事实核查、舆情/政策语义主线、互动时间线和政策评估依据边界。
 
 ## 6. 非目标
 

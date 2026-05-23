@@ -987,6 +987,32 @@ ON agent_section_briefs(run_id, round_id, agent_role, status, brief_id);
 CREATE INDEX IF NOT EXISTS idx_agent_section_briefs_section
 ON agent_section_briefs(run_id, round_id, section_key, brief_id);
 
+CREATE TABLE IF NOT EXISTS situation_analysis_briefs (
+    brief_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    round_id TEXT NOT NULL,
+    generated_at_utc TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT '',
+    program_id TEXT NOT NULL DEFAULT '',
+    basis_round_id TEXT NOT NULL DEFAULT '',
+    decision_source TEXT NOT NULL DEFAULT '',
+    mission_answerable_question TEXT NOT NULL DEFAULT '',
+    central_bounded_judgement TEXT NOT NULL DEFAULT '',
+    evidence_refs_json TEXT NOT NULL DEFAULT '[]',
+    section_brief_refs_json TEXT NOT NULL DEFAULT '[]',
+    basis_object_ids_json TEXT NOT NULL DEFAULT '[]',
+    unresolved_claim_needs_json TEXT NOT NULL DEFAULT '[]',
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    lineage_json TEXT NOT NULL DEFAULT '[]',
+    artifact_path TEXT NOT NULL DEFAULT '',
+    record_locator TEXT NOT NULL DEFAULT '$',
+    raw_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_situation_analysis_briefs_round
+ON situation_analysis_briefs(run_id, round_id, generated_at_utc, brief_id);
+CREATE INDEX IF NOT EXISTS idx_situation_analysis_briefs_program
+ON situation_analysis_briefs(run_id, basis_round_id, program_id, brief_id);
+
 CREATE TABLE IF NOT EXISTS final_publications (
     publication_id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL,

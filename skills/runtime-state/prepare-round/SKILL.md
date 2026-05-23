@@ -24,6 +24,8 @@ description: Build one governed fetch plan from mission.json, round tasks, and s
 - Reads `run_dir/mission.json`.
 - Reads `run_dir/investigation/round_tasks_<round_id>.json`.
 - Reads latest `round-brief` from the deliberation plane when present.
+- Reads latest round-transition context and task-embedded
+  `round_coordination_context` when present.
 - Writes `run_dir/runtime/source_selection_<role>_<round_id>.json`.
 - Writes `run_dir/runtime/fetch_plan_<round_id>.json`.
 
@@ -50,6 +52,10 @@ description: Build one governed fetch plan from mission.json, round tasks, and s
   investigation, not evidence that no source can be used.
 - Source selections and round briefs are context surfaces only; investigators
   may propose, revise, or run allowed source skills through role authority.
+- `program_coordination_context` in the fetch plan merges round brief,
+  transition, and task-scaffold context for visibility only. It does not select
+  source families, source skills, queries, route rankings, scheduler queues, or
+  evidence uptake.
 
 ## References
 - `../../docs/openclaw-project-overview.md`

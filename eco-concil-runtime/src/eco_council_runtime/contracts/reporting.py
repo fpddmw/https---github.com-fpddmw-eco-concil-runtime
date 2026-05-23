@@ -4,6 +4,44 @@ from .types import CanonicalContract, PLANE_REPORTING, _contract
 
 
 REPORTING_CONTRACTS: dict[str, CanonicalContract] = {
+    "situation-analysis-brief": _contract(
+        "situation-analysis-brief",
+        plane=PLANE_REPORTING,
+        schema_version="situation-analysis-brief-v1",
+        id_field="brief_id",
+        required_text_fields=(
+            "decision_source",
+            "status",
+            "program_id",
+            "basis_round_id",
+            "mission_answerable_question",
+            "central_bounded_judgement",
+        ),
+        required_list_fields=(
+            "event_stage_map",
+            "fact_process_chain",
+            "official_action_chain",
+            "public_semantic_chain",
+            "policy_semantic_chain",
+            "interaction_claims",
+            "policy_evaluation_basis",
+            "downgraded_claims",
+            "unresolved_claim_needs",
+            "section_brief_refs",
+            "basis_object_ids",
+            "evidence_refs",
+            "challenger_boundary_refs",
+            "recommended_report_spine",
+            "forbidden_writing_upgrades",
+            "lineage",
+        ),
+        required_dict_fields=("provenance",),
+        required_non_empty_list_fields=(
+            "recommended_report_spine",
+            "forbidden_writing_upgrades",
+        ),
+        required_non_empty_dict_fields=("provenance",),
+    ),
     "agent-section-brief": _contract(
         "agent-section-brief",
         plane=PLANE_REPORTING,
@@ -35,7 +73,10 @@ REPORTING_CONTRACTS: dict[str, CanonicalContract] = {
             "basis_object_ids",
             "sufficiency_review_ids",
             "theme_progress_review_ids",
+            "role_responsibility_boundaries",
+            "theme_progress_dispositions",
         ),
+        optional_dict_fields=("program_context",),
     ),
     "report-section-draft": _contract(
         "report-section-draft",

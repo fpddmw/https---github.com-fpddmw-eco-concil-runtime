@@ -63,6 +63,10 @@ description: Materialize DB-backed reporting packets from frozen evidence basis 
 - Section briefs expose refs, claim strength, denominators, and limitations for
   report-editor judgement; they do not create a parallel report path or validate
   public policy situation analysis by themselves.
+- If no `situation-analysis-brief` is present, expose
+  `materialize-situation-analysis-brief` as the recommended pre-narrative next
+  skill. This is a coordination hint only, not a runtime gate or report approval
+  decision.
 
 ## References
 - `../../docs/openclaw-project-overview.md`

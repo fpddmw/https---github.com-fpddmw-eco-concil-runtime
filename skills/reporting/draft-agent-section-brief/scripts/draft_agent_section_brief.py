@@ -228,6 +228,111 @@ def load_latest_program(run_dir: Path, *, run_id: str, program_id: str) -> dict[
     return {}
 
 
+def program_round_context(program: dict[str, Any], round_id: str) -> dict[str, Any]:
+    for item in list_items(program.get("round_sequence")):
+        if not isinstance(item, dict):
+            continue
+        if maybe_text(item.get("round_id")) == round_id:
+            return item
+    return {}
+
+
+def role_responsibility_boundaries(boundaries: list[Any], agent_role: str) -> list[str]:
+    role = maybe_text(agent_role).casefold()
+    texts = unique_texts(boundaries)
+    if not role:
+        return texts
+    selected = [
+        text
+        for text in texts
+        if text.casefold().startswith(role + ":") or role in text.casefold()
+    ]
+    return selected or texts
+
+
+def theme_thread_summaries(program: dict[str, Any], theme_ids: list[str]) -> list[dict[str, Any]]:
+    active = set(unique_texts(theme_ids))
+    rows: list[dict[str, Any]] = []
+    for thread in list_items(program.get("theme_threads")):
+        if not isinstance(thread, dict):
+            continue
+        theme_id = maybe_text(thread.get("theme_id"))
+        if active and theme_id not in active:
+            continue
+        rows.append(
+            {
+                "theme_id": theme_id,
+                "theme_question": maybe_text(thread.get("theme_question")),
+                "claim_slots_supported": list_items(thread.get("claim_slots_supported")),
+                "claim_basis_boundary": maybe_text(thread.get("claim_basis_boundary")),
+                "owner_role": maybe_text(thread.get("owner_role")),
+            }
+        )
+    return rows
+
+
+def compact_progress_review(review: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "review_id": maybe_text(review.get("review_id")),
+        "program_id": maybe_text(review.get("program_id")),
+        "active_theme_id": maybe_text(review.get("active_theme_id")),
+        "recommended_disposition": maybe_text(review.get("recommended_disposition")),
+        "denominator_status": maybe_text(review.get("denominator_status")),
+        "coverage_or_policy_lane_limits": list_items(review.get("coverage_or_policy_lane_limits")),
+        "in_round_recovery_options": list_items(review.get("in_round_recovery_options")),
+        "supplemental_round_recommendation": list_items(
+            review.get("supplemental_round_recommendation")
+        ),
+    }
+
+
+def agent_section_program_context(
+    *,
+    program: dict[str, Any],
+    program_round: dict[str, Any],
+    agent_role: str,
+    active_theme_ids: list[str],
+    progress_reviews: list[dict[str, Any]],
+) -> dict[str, Any]:
+    boundaries = unique_texts(list_items(program_round.get("agent_responsibility_boundaries")))
+    compact_reviews = [compact_progress_review(review) for review in progress_reviews]
+    return {
+        "schema_version": "agent-section-brief-program-context-v1",
+        "present": bool(program or program_round or progress_reviews),
+        "semantics": (
+            "Report-preparation context only: mission question, active themes, "
+            "role responsibility boundaries, and advisory progress dispositions."
+        ),
+        "program_id": maybe_text(program.get("program_id")),
+        "program_object_id": maybe_text(program.get("object_id")),
+        "mission_question": maybe_text(program.get("mission_question")),
+        "round_id": maybe_text(program_round.get("round_id")),
+        "round_title": maybe_text(program_round.get("round_title")),
+        "round_subtitle_question": maybe_text(program_round.get("round_subtitle_question")),
+        "round_category": maybe_text(program_round.get("round_category")),
+        "round_mode": maybe_text(program_round.get("round_mode")),
+        "active_theme_ids": unique_texts(active_theme_ids),
+        "theme_threads": theme_thread_summaries(program, active_theme_ids),
+        "role_responsibility_boundaries": role_responsibility_boundaries(boundaries, agent_role),
+        "agent_responsibility_boundaries": boundaries,
+        "round_exit_criteria": unique_texts(list_items(program_round.get("round_exit_criteria"))),
+        "theme_progress_reviews": compact_reviews,
+        "theme_progress_dispositions": unique_texts(
+            [review.get("recommended_disposition") for review in compact_reviews]
+        ),
+        "source_autonomy_boundary": maybe_text(program.get("source_autonomy_boundary")),
+        "policy_evaluation_boundary": maybe_text(program.get("policy_evaluation_boundary")),
+        "runtime_boundary": {
+            "context_only": True,
+            "does_not_filter_source_selection": True,
+            "does_not_rank_routes": True,
+            "does_not_auto_execute": True,
+            "does_not_gate_evidence_acceptance": True,
+            "does_not_authorize_reporting": True,
+        },
+    }
+
+
 def role_section_defaults(agent_role: str) -> tuple[str, str]:
     if agent_role == "environmental-investigator":
         return "fact_event_process", "Environmental/fact process brief"
@@ -317,21 +422,37 @@ def build_brief(args: argparse.Namespace) -> dict[str, Any]:
         args.agent_role,
         section_key,
     )
-    progress_reviews = relevant_progress_reviews(
-        load_progress_reviews(run_dir, args.round_id, args.sufficiency_review_path),
-        unique_texts([maybe_text(review.get("theme_id")) for review in reviews]),
+    all_progress_reviews = load_progress_reviews(
+        run_dir,
+        args.round_id,
+        args.sufficiency_review_path,
     )
     program_id = maybe_text(args.program_id) or maybe_text(
         next(
             (
                 review.get("program_id")
-                for review in progress_reviews
+                for review in all_progress_reviews
                 if maybe_text(review.get("program_id"))
             ),
             "",
         )
     )
     program = load_latest_program(run_dir, run_id=args.run_id, program_id=program_id)
+    program_id = program_id or maybe_text(program.get("program_id"))
+    program_round = program_round_context(program, args.round_id)
+    program_active_theme_ids = unique_texts(list_items(program_round.get("active_theme_ids")))
+    review_theme_ids = unique_texts([maybe_text(review.get("theme_id")) for review in reviews])
+    progress_reviews = relevant_progress_reviews(
+        all_progress_reviews,
+        unique_texts([*review_theme_ids, *program_active_theme_ids]),
+    )
+    active_theme_ids = unique_texts(
+        [
+            *program_active_theme_ids,
+            *review_theme_ids,
+            *[maybe_text(review.get("active_theme_id")) for review in progress_reviews],
+        ]
+    )
     signals = signal_summary(
         run_dir,
         run_id=args.run_id,
@@ -420,6 +541,13 @@ def build_brief(args: argparse.Namespace) -> dict[str, Any]:
         "valid_denominators": unique_values([item for review in reviews for item in list_items(review.get("valid_denominators"))]),
         "denominator_boundary": "Public and formal semantic percentages require source-family-local denominators; do not mix families.",
     }
+    program_context = agent_section_program_context(
+        program=program,
+        program_round=program_round,
+        agent_role=args.agent_role,
+        active_theme_ids=active_theme_ids,
+        progress_reviews=progress_reviews,
+    )
     basis_ids = unique_texts(
         [
             maybe_text(item.get("finding_id"))
@@ -449,13 +577,15 @@ def build_brief(args: argparse.Namespace) -> dict[str, Any]:
         "recommended_report_use": maybe_text(args.recommended_report_use) or "Report-editor may use this brief only with frozen/reporting basis and must preserve limitations.",
         "blocked_phrases": blocked,
         "program_id": program_id,
-        "claim_slots_supported": supported_slots,
-        "theme_ids": unique_texts(
-            [
-                *[maybe_text(review.get("theme_id")) for review in reviews],
-                *[maybe_text(review.get("active_theme_id")) for review in progress_reviews],
-            ]
+        "program_context": program_context,
+        "role_responsibility_boundaries": list_items(
+            program_context.get("role_responsibility_boundaries")
         ),
+        "theme_progress_dispositions": list_items(
+            program_context.get("theme_progress_dispositions")
+        ),
+        "claim_slots_supported": supported_slots,
+        "theme_ids": active_theme_ids,
         "basis_object_ids": basis_ids,
         "sufficiency_review_ids": unique_texts([maybe_text(review.get("review_id")) for review in reviews]),
         "theme_progress_review_ids": unique_texts(
@@ -467,6 +597,7 @@ def build_brief(args: argparse.Namespace) -> dict[str, Any]:
                 *supported_slots,
                 *unsupported_slots,
                 maybe_text(program.get("object_id")),
+                *active_theme_ids,
                 *[maybe_text(review.get("review_id")) for review in reviews],
                 *[maybe_text(review.get("review_id")) for review in progress_reviews],
             ]

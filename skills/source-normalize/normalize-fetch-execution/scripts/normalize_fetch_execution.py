@@ -415,7 +415,16 @@ def run_normalizer_for_step(
             reason=f"{source_skill} has no mapped normalizer skill yet; raw artifact was kept for later processing.",
         )
     else:
-        script_path = normalizer_script_path(normalizer_skill)
+        try:
+            script_path = normalizer_script_path(normalizer_skill)
+        except ValueError:
+            return raw_only_normalization_payload(
+                source_skill=source_skill,
+                run_id=run_id,
+                round_id=round_id,
+                artifact_path=raw_artifact_path,
+                reason=f"Normalizer skill {normalizer_skill} is not registered; raw artifact was kept for later processing.",
+            )
         if not script_path.exists():
             return raw_only_normalization_payload(
                 source_skill=source_skill,

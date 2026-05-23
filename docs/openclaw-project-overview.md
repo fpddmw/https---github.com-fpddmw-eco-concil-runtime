@@ -128,9 +128,9 @@ Round 是议会形成阶段性判断的单位，不是 API 重试、query varian
 4. `round_internal_phases`
    - 写入 round brief 或 program，用于区分 acquisition turn、analysis turn、progress review 和 moderator synthesis。数据获取和数据分析/综合不应被伪装成同一种“调查轮”；它们通常是 issue council round 内不同组织环节。
 
-`open-investigation-round` 已支持 `round_mode`、`primary_focus_refs`、`context_packet_id` 和 `round_brief_id` 作为 continuation context；下一阶段应让这些字段深度绑定 `council-investigation-program`，使 supplemental round 不是泛泛“再查一次”，而是承接具体 theme、未满足 obligation、source-limit 争议或 challenger concern。
+`open-investigation-round` 已支持 `round_mode`、`program_id`、active themes、`round_category`、`round_internal_phases`、agent responsibility boundaries、parent theme-progress review refs、`primary_focus_refs`、`context_packet_id` 和 `round_brief_id` 作为 continuation context；`prepare-round` 和 agent entry gate 会把这些字段合并为 program-aware coordination context。它们只作为 handoff surface，不得变成 source family / source skill / query / route ranking / scheduler queue 或 evidence uptake gate。
 
-当前已完成的基线是：开放型 mission 可以保持 `scoping-required`，moderator 可以在 scoping round 中提交 investigation plan、candidate scope、round brief、round synthesis、evidence request 和 context packet；investigator 可以通过薄 `source-acquisition-proposal` 自主记录取证意图，并通过 execution lineage helper 把 proposal 与 receipt / normalized signal refs 串联；agent entry 和 source surfaces 会暴露同一信源家族内的可选多层工作流（例如 GDELT DOC recon 到 Events/Mentions/GKG，YouTube video search 到 comments，Regulations.gov list 到 detail），但这些 workflow 不排序、不评分、不固定议程；round liveness 可把 unresolved refs 带入 continuation round，并提供不排序的 closing checklist；失败、blocked、receipt-only、executed-without-normalized-refs 或 zero-signal acquisition attempt 必须被 source owner 反思后，moderator 才能把 `no-actionable-path` 作为非继续理由；弱报告允许生成，但必须显式记录 claim strength、limitations、unresolved refs 和不继续调查的理由，不能把检索失败当成过早收口的依据；archive/history 可在 checkpoint 后暴露历史 evidence refs。source-family workflow 的常驻说明见 `docs/openclaw-source-family-workflows.md`；claim-strength 收口义务见 `docs/openclaw-claim-strength-obligations.md`。
+当前已完成的基线是：开放型 mission 可以保持 `scoping-required`，moderator 可以在 scoping round 中提交 investigation plan、candidate scope、round brief、round synthesis、evidence request 和 context packet；framing/scope round 可通过 report blueprint、agent positions 和 `synthesize-council-investigation-program` 生成 DB-backed `council-investigation-program`、projected round briefs 和 operator-facing `human_review_packet`，用于人工检查 mission question、缺席角色、issue-round sequence、下一轮建议和非 scheduler 边界；investigator 可以通过薄 `source-acquisition-proposal` 自主记录取证意图，并通过 execution lineage helper 把 proposal 与 receipt / normalized signal refs 串联；agent entry 和 source surfaces 会暴露同一信源家族内的可选多层工作流（例如 GDELT DOC recon 到 Events/Mentions/GKG，YouTube video search 到 comments，Regulations.gov list 到 detail），并在 role entry 中暴露当前 program question、active themes、role responsibility boundaries、theme-progress disposition 和 supplemental parent refs，但这些 workflow 和 context 不排序、不评分、不固定议程、不限制 investigator 路线；round liveness 可把 unresolved refs 带入 continuation round，并提供不排序的 closing checklist；失败、blocked、receipt-only、executed-without-normalized-refs 或 zero-signal acquisition attempt 必须被 source owner 反思后，moderator 才能把 `no-actionable-path` 作为非继续理由；弱报告允许生成，但必须显式记录 claim strength、limitations、unresolved refs 和不继续调查的理由，不能把检索失败当成过早收口的依据；archive/history 可在 checkpoint 后暴露历史 evidence refs。source-family workflow 的常驻说明见 `docs/openclaw-source-family-workflows.md`；claim-strength 收口义务见 `docs/openclaw-claim-strength-obligations.md`。
 
 ## 5. Council Agent 与 Runtime Principal
 
@@ -181,7 +181,8 @@ Round 是议会形成阶段性判断的单位，不是 API 重试、query varian
 4. `runtime/control`
    - `transition-request`、`skill-approval`、`controller-state`、`gate-state`、`supervisor-state`、`runtime-control-freeze`、`orchestration-plan-step`。
 5. `reporting`
-   - `reporting-handoff`、`report-section-draft`、`council-decision`、`expert-report`、`final-publication`。
+   - `agent-section-brief`、`situation-analysis-brief`、`reporting-handoff`、`report-section-draft`、`council-decision`、`expert-report`、`final-publication`。
+   - `situation-analysis-brief` 位于 agent section brief 和 narrative report 之间，只综合已经被 section brief、frozen basis、council object、accepted review 或 challenger boundary 承接的材料；它不是新数据源、调查轮、runtime gate 或报告正文。
 
 关键字段原则：
 
@@ -292,7 +293,7 @@ report-editor 可以组织语言、调整结构和提升可读性，但新增的
 5. report basis gate、freeze、reporting、archive/history。
 6. approval-gated optional-analysis helper governance。
 7. 环境侧已有 `query-environment-signals` 和基础 `aggregate-environment-evidence`，可做 item-level 查询和描述性覆盖摘要。
-8. 已有 claim-gap action cards、公共语义 corpus/coverage/annotation/aggregation、interaction timeline、reporting handoff 和 narrative validator 的初步 typed artifact 链路。
+8. 已有 claim-gap action cards、公共语义 corpus/coverage/annotation/aggregation、interaction timeline、reporting handoff 和 narrative validator 的初步 typed artifact 链路。narrative validator 会检查 situation-analysis brief 是否存在、是否保留 mission-answerable question、central bounded judgement、report spine、事实/官方行动/公共语义/政策语义/互动链条索引、正文是否可见消费 brief 主线、未完成 claim boundary 索引、指令残留、runtime 元话语密度、强 claim 上游 basis 和政策评估显式 basis。
 
 仍有限：
 
@@ -303,7 +304,7 @@ report-editor 可以组织语言、调整结构和提升可读性，但新增的
 5. archive/history 已能 checkpoint 并提供历史 evidence refs；更大规模 raw receipt cache 和跨案例复用策略仍需后续设计。
 6. optional-analysis helper 多为启发式视图，默认 `audit-pending`，不是专业结论模型。
 7. 现有环境聚合层仍偏覆盖摘要；对百万级时序数据需要补齐全量统计、时序 bucket、点事件摘要和小型 evidence-ref sample 输出。
-8. report-driven investigation 仍未完全产品化：report-framing round、council investigation program、program-aware round brief、theme evidence boundary plan、in-round checkpoint、agent-authored section brief 和 policy lane coverage 还需要进一步实现和回归。
+8. report-driven investigation 已具备 framing/program/round brief、theme progress review、supplemental transition context、agent section brief、situation-analysis brief、reporting handoff、narrative draft 和 validator 的最小代码链路。当前工程验收只使用 fixture、backtest 和 smoke harness，不以生产方式运行真实议会；真实 agent uptake 和更宽案例覆盖仍需后续非生产回归。
 
 ## 8. 当前收口状态
 
@@ -331,7 +332,7 @@ skills 不按行数或目录数量机械拆分，但当前平铺目录已经造�
 4. `docs/openclaw-experiment-case-plan.md`
    - 毕业设计实验与案例计划；记录两主案例、两轻量验证、第二主案例风险对比、降级策略和展示材料安排。
 5. `docs/openclaw-runtime-council-program-upgrade-plan.md`
-   - 当前工程工作计划；聚焦 framing/scope council、council investigation program、program-aware issue round brief、supplemental issue council、theme progress review、agent section brief 和报告回归验收。
+   - 当前工程工作计划；聚焦 framing/scope council、council investigation program、program-aware issue round brief、supplemental issue council、theme progress review、agent section brief、situation-analysis brief 和报告回归验收。
 6. `docs/frozen-case-packages/nyc-smoke-20230607/baseline-case-package.md`
    - NYC smoke 第一主案例冻结包；汇总 mission、最终报告、证据链、claim boundary、公共舆情样本结构和答辩可引用的基线结论。
 7. `docs/frozen-case-packages/nyc-smoke-20230607/defense-onepager.md`

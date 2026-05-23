@@ -113,8 +113,10 @@ class DynamicInvestigationObjectTests(unittest.TestCase):
 
             expected_id_field = {
                 "report-blueprint": "blueprint_id",
+                "report-outcome-contract": "contract_id",
                 "investigation-theme": "theme_id",
                 "council-investigation-program": "program_id",
+                "dossier-program": "program_id",
                 "theme-evidence-boundary-plan": "plan_id",
                 "theme-progress-review": "review_id",
             }.get(object_kind, "object_id")

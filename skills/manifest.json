@@ -3,9 +3,9 @@
     "archive-history": 5,
     "deliberation-write": 21,
     "optional-analysis": 27,
-    "planning-program": 5,
+    "planning-program": 6,
     "query": 7,
-    "reporting": 11,
+    "reporting": 12,
     "runtime-state": 6,
     "source-fetch": 21,
     "source-normalize": 21
@@ -14,7 +14,7 @@
   "discovery_rule": "skills/**/SKILL.md with skill name taken from the skill directory name",
   "public_identifier": "skill_name",
   "schema_version": "openclaw-skill-taxonomy-manifest-v1",
-  "skill_count": 124,
+  "skill_count": 126,
   "skills": [
     {
       "physical_path": "skills/optional-analysis/aggregate-environment-evidence",
@@ -519,6 +519,15 @@
       "skill_name": "materialize-research-issue-surface",
       "workflow_stage": "optional-analysis",
       "write_scope": "analysis-write"
+    },
+    {
+      "physical_path": "skills/reporting/materialize-situation-analysis-brief",
+      "skill_category": "reporting",
+      "skill_family": "reporting",
+      "skill_layer": "reporting",
+      "skill_name": "materialize-situation-analysis-brief",
+      "workflow_stage": "reporting",
+      "write_scope": "reporting-write"
     },
     {
       "physical_path": "skills/reporting/materialize-spatiotemporal-relation-evidence-packet",
@@ -1102,6 +1111,15 @@
       "skill_family": "deliberation-write",
       "skill_layer": "deliberation-write",
       "skill_name": "synthesize-council-investigation-program",
+      "workflow_stage": "program-framing",
+      "write_scope": "deliberation-write"
+    },
+    {
+      "physical_path": "skills/planning-program/synthesize-dossier-program",
+      "skill_category": "planning-program",
+      "skill_family": "deliberation-write",
+      "skill_layer": "deliberation-write",
+      "skill_name": "synthesize-dossier-program",
       "workflow_stage": "program-framing",
       "write_scope": "deliberation-write"
     },

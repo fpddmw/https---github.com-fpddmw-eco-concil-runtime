@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -27,6 +28,7 @@ from eco_council_runtime.kernel.governance.skill_registry import (  # noqa: E402
     skill_directory_index,
     skill_boundary_violations,
     skill_registry_snapshot,
+    skill_taxonomy_manifest,
     validate_skill_output_boundary,
 )
 from eco_council_runtime.kernel.source_queue.source_queue_contract import (  # noqa: E402
@@ -165,7 +167,7 @@ class SkillEvidenceOnlyBoundaryTests(unittest.TestCase):
         snapshot = skill_registry_snapshot()
         discovered = skill_directory_index()
         self.assertEqual(snapshot["skill_count"], len(discovered))
-        self.assertEqual(124, snapshot["skill_count"])
+        self.assertEqual(126, snapshot["skill_count"])
         self.assertTrue(set(snapshot["skill_category_counts"]).issubset(set(SKILL_CATEGORIES)))
 
         top_level_dirs = {
@@ -185,6 +187,13 @@ class SkillEvidenceOnlyBoundaryTests(unittest.TestCase):
                 )
                 self.assertIn("skill_family", skill)
                 self.assertIn("workflow_stage", skill)
+
+    def test_static_skill_manifest_matches_recursive_registry(self) -> None:
+        manifest = json.loads(
+            (WORKSPACE_ROOT / "skills" / "manifest.json").read_text(encoding="utf-8")
+        )
+
+        self.assertEqual(skill_taxonomy_manifest(WORKSPACE_ROOT), manifest)
 
     def test_evidence_only_scripts_do_not_accept_scoring_or_ranking_flags(self) -> None:
         forbidden_flags = {

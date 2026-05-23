@@ -2197,6 +2197,14 @@ def artifact_row(kind: str, path: Path, payload: dict[str, Any]) -> dict[str, An
             ]
             if isinstance(item, dict)
         ],
+        "situation_analysis_briefs": [
+            item
+            for item in [
+                *list_items(payload.get("situation_analysis_briefs")),
+                *list_items(report_packet.get("situation_analysis_briefs")),
+            ]
+            if isinstance(item, dict)
+        ],
         "acquisition_checkpoints": [
             item
             for item in [
@@ -2715,6 +2723,159 @@ def first_text(values: list[str], fallback: str = "") -> str:
     return fallback
 
 
+def situation_row_text(row: Any, language: str) -> str:
+    if isinstance(row, dict):
+        candidates = [
+            row.get("summary"),
+            row.get("stage_label"),
+            row.get("central_claim"),
+            row.get("boundary"),
+            row.get("claim_basis_boundary"),
+        ]
+        for value in candidates:
+            text = maybe_text(value)
+            if text:
+                return render_source_text(text, language)
+        return render_source_text(" ".join(text_list(row.get("limitations"))), language)
+    return render_source_text(maybe_text(row), language)
+
+
+def situation_chain_paragraphs(
+    brief: dict[str, Any],
+    field_name: str,
+    *,
+    language: str,
+    zh_label: str,
+    en_label: str,
+    limit: int = 5,
+) -> list[str]:
+    rows = [item for item in list_items(brief.get(field_name)) if item]
+    if not rows:
+        return []
+    label_text = zh_label if is_zh(language) else en_label
+    paragraphs: list[str] = []
+    for row in rows[:limit]:
+        text = situation_row_text(row, language)
+        if not text:
+            continue
+        if is_zh(language):
+            paragraphs.append(f"{label_text}：{text}")
+        else:
+            paragraphs.append(f"{label_text}: {text}")
+    return unique_texts(paragraphs)
+
+
+def situation_analysis_paragraph_sets(brief: dict[str, Any], language: str) -> dict[str, list[str]]:
+    if not brief:
+        return {}
+    central = maybe_text(brief.get("central_bounded_judgement"))
+    mission_question = maybe_text(brief.get("mission_answerable_question"))
+    executive = unique_texts(
+        [
+            (
+                f"本报告围绕的问题是：{mission_question}"
+                if is_zh(language) and mission_question
+                else f"The report is organized around this answerable mission question: {mission_question}"
+                if mission_question
+                else ""
+            ),
+            (
+                f"形势分析综合判断：{render_source_text(central, language)}"
+                if is_zh(language) and central
+                else f"Situation-analysis judgement: {render_source_text(central, language)}"
+                if central
+                else ""
+            ),
+        ]
+    )
+    stage = situation_chain_paragraphs(
+        brief,
+        "event_stage_map",
+        language=language,
+        zh_label="事件阶段",
+        en_label="Event stage",
+    )
+    fact = situation_chain_paragraphs(
+        brief,
+        "fact_process_chain",
+        language=language,
+        zh_label="事实过程",
+        en_label="Fact process",
+    )
+    official = situation_chain_paragraphs(
+        brief,
+        "official_action_chain",
+        language=language,
+        zh_label="官方行动",
+        en_label="Official action",
+    )
+    public = situation_chain_paragraphs(
+        brief,
+        "public_semantic_chain",
+        language=language,
+        zh_label="公共语义",
+        en_label="Public semantics",
+    )
+    policy = situation_chain_paragraphs(
+        brief,
+        "policy_semantic_chain",
+        language=language,
+        zh_label="政策语义与评估边界",
+        en_label="Policy semantics and evaluation boundary",
+    )
+    interaction = situation_chain_paragraphs(
+        brief,
+        "interaction_claims",
+        language=language,
+        zh_label="事实-政策-公共互动",
+        en_label="Fact-policy-public interaction",
+    )
+    unresolved = [
+        *situation_chain_paragraphs(
+            brief,
+            "downgraded_claims",
+            language=language,
+            zh_label="降级主张",
+            en_label="Downgraded claim",
+        ),
+        *situation_chain_paragraphs(
+            brief,
+            "unresolved_claim_needs",
+            language=language,
+            zh_label="未解决需求",
+            en_label="Unresolved claim need",
+        ),
+    ]
+    spine = text_list(brief.get("recommended_report_spine"))
+    if spine:
+        spine = [
+            (
+                f"写作主线：{render_source_text(item, language)}"
+                if is_zh(language)
+                else f"Report spine: {render_source_text(item, language)}"
+            )
+            for item in spine[:5]
+        ]
+    forbidden = text_list(brief.get("forbidden_writing_upgrades"))
+    if forbidden:
+        forbidden = [
+            (
+                f"写作禁止升级：{render_source_text(item, language)}"
+                if is_zh(language)
+                else f"Forbidden writing upgrade: {render_source_text(item, language)}"
+            )
+            for item in forbidden[:6]
+        ]
+    return {
+        "executive": executive,
+        "narrative": unique_texts([*stage, *fact, *official]),
+        "evidence": unique_texts([*fact, *official, *public, *policy, *interaction]),
+        "public_policy": unique_texts([*public, *policy, *interaction]),
+        "limitations": unique_texts([*unresolved, *forbidden]),
+        "closure": unique_texts([*spine, *interaction, *policy]),
+    }
+
+
 def role_rows(rows: list[dict[str, Any]], roles: set[str]) -> list[dict[str, Any]]:
     return [row for row in rows if maybe_text(row.get("agent_role")) in roles]
 
@@ -3056,7 +3217,7 @@ def build_public_discourse_addendum(
                 "本报告将新增的公共舆情摘要作为样本内舆情深化补充，而不是作为样本外人群结论。"
                 f"它汇总了 {sample_count} 条已归一化公共/正式记录。"
                 f"总体样本分母为 {sample_count}；"
-                f"来源家族分母为：{source_family_summary or '摘要未提供来源家族计数'}；"
+                f"来源家族构成及分母为：{source_family_summary or '摘要未提供来源家族计数'}；"
                 f"样本通道分母为：{lane_summary or '摘要未提供样本通道计数'}。"
             ),
             (
@@ -3897,6 +4058,10 @@ def draft_narrative_report(
             },
         }
     section_briefs = section_briefs_from_reporting_basis(reporting_basis)
+    situation_analysis_briefs = reporting_basis_items(
+        reporting_basis,
+        "situation_analysis_briefs",
+    )
     acquisition_checkpoints = reporting_basis_items(reporting_basis, "acquisition_checkpoints")
     theme_sufficiency_reviews = reporting_basis_items(
         reporting_basis,
@@ -3932,8 +4097,18 @@ def draft_narrative_report(
     all_refs = unique_texts(
         [
             *[f"{row['kind']}:{row['id']}" for row in reporting_basis if row.get("id")],
+            *[
+                f"situation-analysis-brief:{brief.get('brief_id')}"
+                for brief in situation_analysis_briefs
+                if maybe_text(brief.get("brief_id"))
+            ],
             *[row["ref"] for row in object_rows if row.get("ref")],
             *[ref for row in reporting_basis for ref in row.get("evidence_refs", [])],
+            *[
+                ref
+                for brief in situation_analysis_briefs
+                for ref in list_items(brief.get("evidence_refs"))
+            ],
             *[ref for row in object_rows for ref in row.get("evidence_refs", [])],
             *section_brief_refs,
             *([f"{public_summary_path}:$"] if public_summary_path and public_summary else []),
@@ -4033,6 +4208,10 @@ def draft_narrative_report(
         ]
     substantive_candidates = (
         [
+            *[
+                maybe_text(brief.get("central_bounded_judgement"))
+                for brief in situation_analysis_briefs
+            ],
             *formal_helper_lines[:1],
             *[rendered_row_text(row, report_language, limit=1500) for row in social_rows],
             *synthesis_text[:1],
@@ -4040,6 +4219,10 @@ def draft_narrative_report(
         ]
         if case_profile == "formal-policy-comment"
         else [
+            *[
+                maybe_text(brief.get("central_bounded_judgement"))
+                for brief in situation_analysis_briefs
+            ],
             *[rendered_row_text(row, report_language, limit=1500) for row in environmental_rows],
             *[rendered_row_text(row, report_language, limit=1500) for row in social_rows],
             *known_fact_text[:2],
@@ -4168,6 +4351,28 @@ def draft_narrative_report(
         boundary_line=boundary_line_for_report,
         language=report_language,
     )
+    primary_situation_brief = situation_analysis_briefs[0] if situation_analysis_briefs else {}
+    situation_paragraphs = situation_analysis_paragraph_sets(
+        primary_situation_brief,
+        report_language,
+    )
+    if primary_situation_brief:
+        situation_spine = text_list(primary_situation_brief.get("recommended_report_spine"))
+        situation_limits = text_list(primary_situation_brief.get("forbidden_writing_upgrades"))
+        central = maybe_text(primary_situation_brief.get("central_bounded_judgement"))
+        if central:
+            argument_map["central_claim"] = central
+        if situation_spine:
+            argument_map["reasoning_chain"] = unique_texts(
+                [*situation_spine, *text_list(argument_map.get("reasoning_chain"))]
+            )[:8]
+            argument_map["direct_answers"] = unique_texts(
+                [central, *situation_spine[:2], *text_list(argument_map.get("direct_answers"))]
+            )
+        if situation_limits:
+            argument_map["limitations"] = unique_texts(
+                [*situation_limits[:5], *text_list(argument_map.get("limitations"))]
+            )
     if formal_policy_argument and is_zh(report_language):
         argument_map.update(
             {
@@ -4235,6 +4440,10 @@ def draft_narrative_report(
             environmental_detail=environmental_detail,
         )
     )
+    if situation_paragraphs.get("narrative"):
+        narrative_account = unique_texts(
+            [*situation_paragraphs["narrative"], *narrative_account]
+        )
     evidence_chain = (
         unique_texts([*argument_evidence, *formal_helper_lines])
         if is_zh(report_language)
@@ -4245,11 +4454,19 @@ def draft_narrative_report(
             limitation_line=boundary_line,
         )
     )
+    if situation_paragraphs.get("evidence"):
+        evidence_chain = unique_texts(
+            [*situation_paragraphs["evidence"], *evidence_chain]
+        )
     closure_narrative = (
         build_zh_closure_narrative(synthesis_line=synthesis_line, readiness_lines=readiness_text, profile=case_profile)
         if is_zh(report_language)
         else build_en_closure_narrative(synthesis_line=synthesis_line, readiness_lines=readiness_text)
     )
+    if situation_paragraphs.get("closure"):
+        closure_narrative = unique_texts(
+            [*situation_paragraphs["closure"], *closure_narrative]
+        )
     if is_zh(report_language):
         limitation_narrative = [
             "这份报告的限制必须和结论同等显眼：它只能解释已进入报告基础的材料能支持的内容，不能补写调查阶段没有形成的事实。",
@@ -4261,6 +4478,10 @@ def draft_narrative_report(
             "Public, media, and formal-record material supports bounded semantic or governance context where cited; it is not representative public sentiment or physical source attribution by itself.",
             "The report is usable as a bounded synthesis, but stronger causal, attribution, representativeness, or policy claims require further investigation and council adoption.",
         ]
+    if situation_paragraphs.get("limitations"):
+        limitation_narrative = unique_texts(
+            [*situation_paragraphs["limitations"], *limitation_narrative]
+        )
     if not policy_basis_visible:
         policy_limit = (
             "政策线限制：本轮没有可见的 official action / governance record section brief 或等价报告依据；报告只能把政策评估写成缺口和后续评估维度，不能写政策有效性、政策回应或责任结论。"
@@ -4357,19 +4578,28 @@ def draft_narrative_report(
         section(
             "executive-summary",
             label("executive-summary", report_language),
-            academic_abstract[:3] if academic_sections_for_json else [
-                (
-                    f"围绕 {mission_focus}，本报告的核心判断是：{maybe_text(argument_map.get('central_claim')) or environmental_detail_for_report or bottom_line_for_report}"
-                    if is_zh(report_language)
-                    else f"This report synthesizes the frozen council basis as an academic-style case analysis. The supportable central finding is: {bottom_line}"
-                ),
-                (
-                    f"推理路径是：{first_text(text_list(argument_map.get('reasoning_chain')), social_line_for_report)}"
-                    if is_zh(report_language)
-                    else case_frame_sentence
-                ),
-                boundary_sentence,
-            ],
+            unique_texts(
+                [
+                    *situation_paragraphs.get("executive", []),
+                    *(
+                        academic_abstract[:3]
+                        if academic_sections_for_json
+                        else [
+                            (
+                                f"围绕 {mission_focus}，本报告的核心判断是：{maybe_text(argument_map.get('central_claim')) or environmental_detail_for_report or bottom_line_for_report}"
+                                if is_zh(report_language)
+                                else f"This report synthesizes the frozen council basis as an academic-style case analysis. The supportable central finding is: {bottom_line}"
+                            ),
+                            (
+                                f"推理路径是：{first_text(text_list(argument_map.get('reasoning_chain')), social_line_for_report)}"
+                                if is_zh(report_language)
+                                else case_frame_sentence
+                            ),
+                            boundary_sentence,
+                        ]
+                    ),
+                ]
+            ),
             all_refs[:12],
             language=report_language,
         ),
@@ -4539,6 +4769,10 @@ def draft_narrative_report(
             "language": report_language,
             "sample_distribution_policy": "sample-local only; non-exclusive labels must not be summed into public opinion",
             "source_narrative_policy": "public source narratives are cues for council review, not physical source attribution",
+            "situation_analysis_brief_first": bool(primary_situation_brief),
+            "situation_analysis_brief_policy": (
+                "When present, the narrative draft uses the situation-analysis brief as the primary report spine before falling back to scattered council objects."
+            ),
             "claim_sensitive_soft_obligations": [
                 {
                     "claim_family": "public_discourse_emotion_issue_or_proportion",
@@ -4581,6 +4815,7 @@ def draft_narrative_report(
                 "request_text": maybe_text(mission.get("request_text")),
             },
             "reporting_artifacts": reporting_basis,
+            "situation_analysis_preferred": bool(primary_situation_brief),
             "council_object_counts": {kind: len(rows) for kind, rows in object_sets.items()},
             "agent_role_counts": {
                 role: sum(1 for row in object_rows if maybe_text(row.get("agent_role")) == role)
@@ -4593,6 +4828,7 @@ def draft_narrative_report(
                 "advisory_only": bool(public_summary),
             },
             "section_briefs": section_briefs,
+            "situation_analysis_briefs": situation_analysis_briefs,
             "acquisition_checkpoints": acquisition_checkpoints,
             "theme_sufficiency_reviews": theme_sufficiency_reviews,
             "interaction_timeline": {

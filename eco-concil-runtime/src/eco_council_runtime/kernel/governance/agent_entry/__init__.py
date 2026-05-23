@@ -33,6 +33,8 @@ COORDINATION_OBJECT_KINDS = (
     "investigation-scope",
     "round-brief",
     "round-synthesis",
+    "theme-evidence-boundary-plan",
+    "theme-progress-review",
     "evidence-request",
     "source-acquisition-proposal",
     "agent-position",
@@ -239,6 +241,22 @@ def text_list(value: Any) -> list[str]:
     return [maybe_text(item) for item in value if maybe_text(item)]
 
 
+def list_items(value: Any) -> list[Any]:
+    return list(value) if isinstance(value, list) else []
+
+
+def unique_texts(values: list[Any]) -> list[str]:
+    seen: set[str] = set()
+    results: list[str] = []
+    for value in values:
+        text = maybe_text(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        results.append(text)
+    return results
+
+
 def coordination_query_command(
     *,
     run_dir: Path,
@@ -305,6 +323,15 @@ def compact_coordination_object(payload: dict[str, Any]) -> dict[str, Any]:
         "round_subtitle_question",
         "round_category",
         "supplemental_round_policy",
+        "theme_id",
+        "active_theme_id",
+        "theme_question",
+        "authoring_mode",
+        "sample_unit",
+        "downgrade_boundary",
+        "analysis_status",
+        "denominator_status",
+        "recommended_disposition",
     ):
         value = maybe_text(payload.get(field_name))
         if value:
@@ -338,6 +365,16 @@ def compact_coordination_object(payload: dict[str, Any]) -> dict[str, Any]:
         "round_exit_criteria",
         "in_round_feedback_triggers",
         "forbidden_source_precommitments",
+        "claim_slots_supported",
+        "evidence_obligations",
+        "success_criteria",
+        "denominator_obligations",
+        "failure_recovery_plan",
+        "agent_responsibility_status",
+        "available_basis_refs",
+        "coverage_or_policy_lane_limits",
+        "in_round_recovery_options",
+        "supplemental_round_recommendation",
         "theme_progress_review_ids",
     ):
         values = text_list(payload.get(field_name))
@@ -406,6 +443,215 @@ def coordination_object_ref(payload: dict[str, Any]) -> dict[str, str]:
     return {
         "object_kind": maybe_text(payload.get("object_kind")),
         "object_id": maybe_text(payload.get("object_id")),
+    }
+
+
+def latest_program_object(
+    run_dir: Path,
+    *,
+    run_id: str,
+    program_id: str,
+) -> dict[str, Any]:
+    if not maybe_text(program_id):
+        return {}
+    try:
+        payload = query_council_objects(
+            run_dir,
+            object_kind="council-investigation-program",
+            run_id=run_id,
+            limit=100,
+        )
+    except ValueError:
+        return {}
+    for item in payload.get("objects", []) if isinstance(payload.get("objects"), list) else []:
+        if not isinstance(item, dict):
+            continue
+        if maybe_text(item.get("program_id")) == program_id or maybe_text(item.get("object_id")) == program_id:
+            return compact_coordination_object(item)
+    return {}
+
+
+def role_boundaries(boundaries: list[str]) -> dict[str, list[str]]:
+    grouped: dict[str, list[str]] = {}
+    for boundary in boundaries:
+        role, separator, detail = maybe_text(boundary).partition(":")
+        if not separator:
+            grouped.setdefault("all-roles", []).append(maybe_text(boundary))
+            continue
+        grouped.setdefault(maybe_text(role), []).append(maybe_text(detail))
+    return {
+        role: unique_texts(values)
+        for role, values in grouped.items()
+        if unique_texts(values)
+    }
+
+
+def program_context_surface(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    round_opening_context: dict[str, Any],
+    latest_round_brief: dict[str, Any],
+    object_sets: dict[str, Any],
+) -> dict[str, Any]:
+    progress_reviews = (
+        object_sets.get("theme-progress-review", {}).get("objects", [])
+        if isinstance(object_sets.get("theme-progress-review"), dict)
+        else []
+    )
+    progress_review_rows = [
+        item for item in progress_reviews if isinstance(item, dict)
+    ]
+    program_id = (
+        maybe_text(round_opening_context.get("program_id"))
+        or maybe_text(latest_round_brief.get("program_id"))
+    )
+    active_theme_ids = unique_texts(
+        [
+            *text_list(round_opening_context.get("active_theme_ids")),
+            *text_list(latest_round_brief.get("active_theme_ids")),
+            *[
+                maybe_text(item.get("active_theme_id"))
+                for item in progress_review_rows
+            ],
+        ]
+    )
+    responsibility_boundaries = unique_texts(
+        [
+            *text_list(round_opening_context.get("agent_responsibility_boundaries")),
+            *text_list(latest_round_brief.get("agent_responsibility_boundaries")),
+        ]
+    )
+    program_object = latest_program_object(
+        run_dir,
+        run_id=run_id,
+        program_id=program_id,
+    )
+    return {
+        key: value
+        for key, value in {
+            "schema_version": "agent-entry-program-context-v1",
+            "present": bool(
+                program_id
+                or active_theme_ids
+                or latest_round_brief
+                or round_opening_context.get("present")
+                or progress_review_rows
+            ),
+            "semantics": COORDINATION_HINT_SEMANTICS,
+            "runtime_boundary": {
+                "context_only": True,
+                "does_not_filter_source_selection": True,
+                "does_not_rank_routes": True,
+                "does_not_auto_execute": True,
+                "does_not_gate_evidence_acceptance": True,
+            },
+            "program_id": program_id,
+            "program_object": program_object
+            or (
+                {
+                    "object_kind": "council-investigation-program",
+                    "object_id": program_id,
+                    "resolution_status": "referenced-not-loaded",
+                }
+                if program_id
+                else {}
+            ),
+            "round_mode": maybe_text(round_opening_context.get("round_mode"))
+            or maybe_text(latest_round_brief.get("round_mode")),
+            "round_category": maybe_text(round_opening_context.get("round_category"))
+            or maybe_text(latest_round_brief.get("round_category")),
+            "round_title": maybe_text(round_opening_context.get("round_title"))
+            or maybe_text(latest_round_brief.get("round_title")),
+            "round_subtitle_question": maybe_text(
+                round_opening_context.get("round_subtitle_question")
+            )
+            or maybe_text(latest_round_brief.get("round_subtitle_question")),
+            "active_theme_ids": active_theme_ids,
+            "round_internal_phases": unique_texts(
+                [
+                    *text_list(round_opening_context.get("round_internal_phases")),
+                    *text_list(latest_round_brief.get("round_internal_phases")),
+                ]
+            ),
+            "round_exit_criteria": text_list(latest_round_brief.get("round_exit_criteria")),
+            "agent_responsibility_boundaries": responsibility_boundaries,
+            "role_responsibility_boundaries": role_boundaries(responsibility_boundaries),
+            "primary_focus_refs": unique_texts(
+                [
+                    *text_list(round_opening_context.get("primary_focus_refs")),
+                    *text_list(latest_round_brief.get("primary_focus_refs")),
+                ]
+            ),
+            "unresolved_responsibility_boundary_refs": text_list(
+                round_opening_context.get("unresolved_responsibility_boundary_refs")
+            ),
+            "parent_theme_progress_review_refs": text_list(
+                round_opening_context.get("parent_theme_progress_review_refs")
+            ),
+            "theme_progress_reviews": progress_review_rows,
+            "theme_progress_dispositions": unique_texts(
+                [item.get("recommended_disposition") for item in progress_review_rows]
+            ),
+            "supplemental_recommendation_count": len(
+                [
+                    item
+                    for review in progress_review_rows
+                    for item in list_items(review.get("supplemental_round_recommendation"))
+                ]
+            ),
+        }.items()
+        if value not in ("", [], {})
+    }
+
+
+def role_program_context(
+    program_context: dict[str, Any],
+    *,
+    role: str,
+) -> dict[str, Any]:
+    role_boundaries_by_role = (
+        program_context.get("role_responsibility_boundaries")
+        if isinstance(program_context.get("role_responsibility_boundaries"), dict)
+        else {}
+    )
+    return {
+        key: value
+        for key, value in {
+            "schema_version": "agent-entry-role-program-context-v1",
+            "present": bool(program_context.get("present")),
+            "semantics": maybe_text(program_context.get("semantics")) or COORDINATION_HINT_SEMANTICS,
+            "runtime_boundary": program_context.get("runtime_boundary", {}),
+            "program_id": maybe_text(program_context.get("program_id")),
+            "round_mode": maybe_text(program_context.get("round_mode")),
+            "round_category": maybe_text(program_context.get("round_category")),
+            "round_title": maybe_text(program_context.get("round_title")),
+            "round_subtitle_question": maybe_text(
+                program_context.get("round_subtitle_question")
+            ),
+            "active_theme_ids": text_list(program_context.get("active_theme_ids")),
+            "round_internal_phases": text_list(
+                program_context.get("round_internal_phases")
+            ),
+            "round_exit_criteria": text_list(program_context.get("round_exit_criteria")),
+            "role_responsibility_boundaries": unique_texts(
+                [
+                    *text_list(role_boundaries_by_role.get(role)),
+                    *text_list(role_boundaries_by_role.get("all-roles")),
+                ]
+            ),
+            "all_agent_responsibility_boundaries": text_list(
+                program_context.get("agent_responsibility_boundaries")
+            ),
+            "parent_theme_progress_review_refs": text_list(
+                program_context.get("parent_theme_progress_review_refs")
+            ),
+            "theme_progress_dispositions": text_list(
+                program_context.get("theme_progress_dispositions")
+            ),
+        }.items()
+        if value not in ("", [], {})
     }
 
 
@@ -535,16 +781,26 @@ def coordination_surface(run_dir: Path, *, run_id: str, round_id: str) -> dict[s
         for item in object_set.get("objects", [])
         if isinstance(item, dict) and maybe_text(item.get("object_id"))
     ]
+    round_opening_context = round_opening_context_surface(
+        run_dir,
+        round_id=round_id,
+    )
+    program_context = program_context_surface(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        round_opening_context=round_opening_context,
+        latest_round_brief=latest_round_brief,
+        object_sets=object_sets,
+    )
     return {
         "schema_version": "agent-entry-coordination-surface-v1",
         "run_id": run_id,
         "round_id": round_id,
         "semantics": COORDINATION_HINT_SEMANTICS,
         "ordering_semantics": "Objects are exposed in deterministic generated_at order only, not salience or evidence strength order.",
-        "round_opening_context": round_opening_context_surface(
-            run_dir,
-            round_id=round_id,
-        ),
+        "round_opening_context": round_opening_context,
+        "program_context": program_context,
         "latest_round_brief": latest_round_brief,
         "context_packet": context_packet
         or (
@@ -636,6 +892,18 @@ def build_agent_entry_payload(
         next_round_id=next_round_id,
         role_definitions=role_definitions,
     )
+    program_context = (
+        coordination.get("program_context")
+        if isinstance(coordination.get("program_context"), dict)
+        else {}
+    )
+    for entry in role_entries:
+        if not isinstance(entry, dict):
+            continue
+        entry["program_coordination_context"] = role_program_context(
+            program_context,
+            role=maybe_text(entry.get("role")),
+        )
     recommended_skills = recommended_skills_builder()
     requested_by_role = maybe_text(actor_role)
     payload = {
@@ -765,6 +1033,16 @@ def agent_entry_operator_view(
         if isinstance(coordination.get("round_opening_context"), dict)
         else {}
     )
+    program_context = (
+        coordination.get("program_context")
+        if isinstance(coordination.get("program_context"), dict)
+        else {}
+    )
+    coordination_query_commands = (
+        coordination.get("query_commands")
+        if isinstance(coordination.get("query_commands"), dict)
+        else {}
+    )
     gate_round_liveness = (
         gate.get("round_liveness_surface")
         if isinstance(gate.get("round_liveness_surface"), dict)
@@ -852,6 +1130,19 @@ def agent_entry_operator_view(
         else [],
         "latest_round_brief_id": maybe_text(latest_round_brief.get("object_id")),
         "active_context_packet_id": maybe_text(context_packet.get("object_id")),
+        "program_context_present": bool(program_context.get("present")),
+        "program_id": maybe_text(program_context.get("program_id")),
+        "program_round_subtitle_question": maybe_text(
+            program_context.get("round_subtitle_question")
+        ),
+        "program_round_category": maybe_text(program_context.get("round_category")),
+        "program_active_theme_ids": text_list(program_context.get("active_theme_ids")),
+        "program_parent_theme_progress_review_refs": text_list(
+            program_context.get("parent_theme_progress_review_refs")
+        ),
+        "program_theme_progress_dispositions": text_list(
+            program_context.get("theme_progress_dispositions")
+        ),
         "round_liveness_source": "live-deliberation-plane" if run_id and round_id else "",
         "entry_gate_round_liveness_status": maybe_text(gate_continuation.get("status")),
         "entry_gate_unresolved_ref_count": int(
@@ -887,6 +1178,12 @@ def agent_entry_operator_view(
         "query_subissues_command": maybe_text(entry_commands.get("query_subissues_command")),
         "query_investigation_scopes_command": maybe_text(entry_commands.get("query_investigation_scopes_command")),
         "query_round_briefs_command": maybe_text(entry_commands.get("query_round_briefs_command")),
+        "query_theme_evidence_boundary_plans_command": maybe_text(
+            coordination_query_commands.get("theme-evidence-boundary-plan")
+        ),
+        "query_theme_progress_reviews_command": maybe_text(
+            coordination_query_commands.get("theme-progress-review")
+        ),
         "query_round_syntheses_command": maybe_text(entry_commands.get("query_round_syntheses_command")),
         "query_evidence_requests_command": maybe_text(entry_commands.get("query_evidence_requests_command")),
         "query_source_acquisition_proposals_command": maybe_text(entry_commands.get("query_source_acquisition_proposals_command")),

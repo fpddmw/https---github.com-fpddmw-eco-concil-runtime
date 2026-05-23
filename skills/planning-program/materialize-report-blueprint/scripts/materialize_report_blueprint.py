@@ -169,17 +169,17 @@ def claim_slots_for_mission(text: str) -> list[dict[str, Any]]:
     focus = mission_focus_label(text)
     profile = mission_profile(text)
     fact_label = {
-        "air-quality-incident": f"What happened in the observed air-quality and smoke record for {focus}?",
+        "air-quality-incident": f"What observable event chronology, environmental conditions, and source-origin hypotheses are actually supported for {focus}?",
         "water-operations-governance": f"What operating or hydrologic changes are visible for {focus}?",
         "formal-policy-comment": f"What formal policy or comment record is actually in scope for {focus}?",
     }.get(profile, f"What fact process or governance event is the report being asked to explain for {focus}?")
     official_label = {
-        "air-quality-incident": f"What official advisories, agency actions, or governance records were visible around {focus}?",
+        "air-quality-incident": f"What official advisories, policy actions, public statements, or governance records frame {focus}?",
         "water-operations-governance": f"What official operating, project, notice, or governance records frame {focus}?",
         "formal-policy-comment": f"What official docket, notice, rulemaking, or agency action frames {focus}?",
     }.get(profile, f"What official action or governance record frames {focus}?")
     public_label = {
-        "air-quality-incident": f"What sample-local public or media semantics are visible about risk, communication, and concern in {focus}?",
+        "air-quality-incident": f"What sample-local public, media, or formal semantics are visible about risk, information needs, protective action, attribution, and trust in {focus}?",
         "water-operations-governance": f"What sample-local public, media, or formal semantics are visible about tradeoffs and governance in {focus}?",
         "formal-policy-comment": f"What sample-local formal comment issues or policy semantics are visible in {focus}?",
     }.get(profile, f"What bounded public, media, or formal semantic patterns are visible for {focus}?")
@@ -261,9 +261,9 @@ def themes_for_slots(slots: list[dict[str, Any]]) -> list[dict[str, Any]]:
             owner_role="environmental-investigator",
             question=next(item["question"] for item in slots if item["slot_kind"] == "fact_event_process"),
             slots=[by_kind["fact_event_process"]],
-            boundary="Describe fact process and physical/governance observations without upgrading to responsibility, policy effect, or public attitude.",
-            expected_artifacts=["finding", "evidence-bundle", "environment or formal signal query result", "agent-section-brief"],
-            completion=["item-level refs visible", "claim strength and limitations stated"],
+            boundary="Describe fact process, environmental observations, and source-origin hypotheses without upgrading to responsibility, policy effect, or public attitude.",
+            expected_artifacts=["theme-dossier", "theme-report", "structured fact table", "timeline items", "episode cards", "lineage refs"],
+            completion=["item-level refs, timeline basis, claim strength, and unsupported attribution boundaries are visible"],
         ),
         theme(
             theme_id="theme-official-policy-action",
@@ -271,8 +271,8 @@ def themes_for_slots(slots: list[dict[str, Any]]) -> list[dict[str, Any]]:
             question=next(item["question"] for item in slots if item["slot_kind"] == "official_policy_action"),
             slots=[by_kind["official_policy_action"]],
             boundary="Establish official/governance record presence and scope without proving policy effectiveness.",
-            expected_artifacts=["official/governance record refs", "finding or evidence-bundle", "agent-section-brief"],
-            completion=["official action or governance record basis visible, or source-limit downgrade recorded"],
+            expected_artifacts=["theme-dossier", "theme-report", "official action table", "statement timeline", "oversight critique refs"],
+            completion=["official action, statement, or governance record basis is visible, or source-limit downgrade is recorded"],
         ),
         theme(
             theme_id="theme-public-semantic-perception",
@@ -280,8 +280,8 @@ def themes_for_slots(slots: list[dict[str, Any]]) -> list[dict[str, Any]]:
             question=next(item["question"] for item in slots if item["slot_kind"] == "public_semantic_perception"),
             slots=[by_kind["public_semantic_perception"]],
             boundary="Keep public/media/formal semantic claims source-family-local and denominator-bounded.",
-            expected_artifacts=["public-policy corpus", "coverage audit", "annotation or aggregation artifact", "agent-section-brief"],
-            completion=["sample definition, source family, denominator, and representativeness limits visible"],
+            expected_artifacts=["theme-dossier", "theme-report", "coverage audit", "semantic episode cards", "representative examples"],
+            completion=["sample definition, source family, denominator, representative examples, and representativeness limits are visible"],
         ),
         theme(
             theme_id="theme-interaction-timeline",
@@ -289,7 +289,7 @@ def themes_for_slots(slots: list[dict[str, Any]]) -> list[dict[str, Any]]:
             question=next(item["question"] for item in slots if item["slot_kind"] == "interaction_timeline"),
             slots=[by_kind["interaction_timeline"]],
             boundary="Compose lane chronology only after lane episode cards exist; do not infer causality from co-visibility.",
-            expected_artifacts=["lane episode cards", "interaction timeline nodes", "agent-section-brief"],
+            expected_artifacts=["theme-dossier", "theme-report", "lane episode cards", "interaction nodes", "claim-strength map"],
             completion=["fact/policy refs and public/media refs are both visible, or interaction claim is downgraded"],
         ),
     ]
@@ -415,6 +415,156 @@ def theme_payloads(
     return rows
 
 
+def report_outcome_contract_payload(
+    *,
+    run_id: str,
+    round_id: str,
+    author_role: str,
+    blueprint: dict[str, Any],
+    themes: list[dict[str, Any]],
+    output_file: Path,
+) -> dict[str, Any]:
+    theme_by_id = {maybe_text(theme.get("theme_id")): theme for theme in themes}
+    slot_section_by_id = {
+        maybe_text(slot_item.get("slot_id")): maybe_text(slot_item.get("expected_section"))
+        for slot_item in list_items(blueprint.get("claim_slots"))
+        if isinstance(slot_item, dict)
+    }
+    required_theme_reports = []
+    for theme_id, theme in theme_by_id.items():
+        report_id = theme_id.removeprefix("theme-") or "theme-report"
+        supported_sections = unique_texts(
+            [
+                slot_section_by_id.get(maybe_text(slot_id), "")
+                for slot_id in list_items(theme.get("claim_slots_supported"))
+            ]
+        )
+        title = f"{report_id.replace('-', ' ').title()} theme report"
+        final_use = (
+            "Support final report section(s): " + ", ".join(supported_sections)
+            if supported_sections
+            else "Support a bounded final report section only after review and adoption."
+        )
+        theme = theme_by_id.get(theme_id, {})
+        required_theme_reports.append(
+            {
+                "theme_report_id": report_id,
+                "theme_id": theme_id,
+                "title": title,
+                "owner_role": maybe_text(theme.get("owner_role")) or "moderator",
+                "required_dossier": "theme_dossier",
+                "required_review": "challenger",
+                "required_adoption": "moderator",
+                "minimum_dossier_components": [
+                    "evidence inventory",
+                    "structured tables",
+                    "timeline items",
+                    "episode cards",
+                    "representative examples",
+                    "denominators",
+                    "coverage gaps",
+                    "claim boundaries",
+                    "lineage refs",
+                ],
+                "minimum_theme_report_components": [
+                    "main findings",
+                    "timeline or episode narrative",
+                    "claim strength map",
+                    "limitations",
+                    "recommended final report use",
+                    "blocked claims",
+                ],
+                "final_report_use": final_use,
+            }
+        )
+    contract_id = "report-outcome-contract-" + stable_hash(
+        run_id,
+        round_id,
+        maybe_text(blueprint.get("blueprint_id")),
+        len(required_theme_reports),
+    )[:12]
+    mission_question = (
+        maybe_text((list_items(blueprint.get("report_questions")) or [""])[0])
+        or "What should the final report answer?"
+    )
+    return {
+        "run_id": run_id,
+        "round_id": round_id,
+        "object_kind": "report-outcome-contract",
+        "object_id": contract_id,
+        "contract_id": contract_id,
+        "author_role": author_role,
+        "agent_role": author_role,
+        "decision_source": "report-framing-round",
+        "status": "proposed",
+        "adoption_status": "proposed-for-dossier-program",
+        "target_kind": "report-blueprint",
+        "target_id": maybe_text(blueprint.get("object_id")) or maybe_text(blueprint.get("blueprint_id")),
+        "target": {
+            "object_kind": "report-blueprint",
+            "object_id": maybe_text(blueprint.get("object_id")) or maybe_text(blueprint.get("blueprint_id")),
+        },
+        "rationale": "Final report requirements are declared before investigation so report writing cannot organize evidence for the first time.",
+        "mission_question": mission_question,
+        "required_theme_reports": required_theme_reports,
+        "required_cross_theme_reviews": [
+            {
+                "review_id": "challenger-cross-theme-boundary-review",
+                "reviewer_role": "challenger",
+                "scope": [
+                    "causal overreach",
+                    "public-proportion overreach",
+                    "policy-effectiveness overreach",
+                    "attribution overreach",
+                    "missing denominator propagation",
+                ],
+            }
+        ],
+        "quality_gates": [
+            "Every required theme report must cite a readable theme dossier.",
+            "Every required theme report must have challenger review and moderator adoption before final report use.",
+            "Adopted-with-downgrades limitations must enter final composition planning.",
+            "Interaction analysis, when carried, requires an interaction artifact with claim strength and forbidden inference on each edge.",
+            "Policy evaluation, when carried, requires explicit alignment/gap basis and must separate communication quality from causal effectiveness.",
+            "Final report may consume only adopted theme reports and the final composition plan.",
+        ],
+        "final_report_obligations": [
+            "Conclusion first and key findings before detailed evidence sections.",
+            "Fact or event-process claims and attribution boundaries are stated separately.",
+            "Official/governance records, public/media/formal semantic analysis where scoped, interaction analysis where carried, policy evaluation boundaries, and audit index are presented through adopted theme reports.",
+            "Unsupported causal effectiveness, reach, compliance, exposure reduction, and counterfactual health-outcome claims are excluded.",
+        ],
+        "forbidden_final_report_inputs": [
+            "Do not introduce new helper-only conclusions in the final report.",
+            "Do not treat document/media tone as public sentiment.",
+            "Do not let large document samples suppress smaller social/comment samples without separate denominators.",
+            "Do not bypass adopted theme reports with direct artifact synthesis.",
+        ],
+        "audit_index_requirements": [
+            "theme dossier refs",
+            "theme report refs",
+            "review refs",
+            "adoption refs",
+            "lineage refs",
+            "claim downgrade and exclusion refs",
+            "composition-plan refs",
+        ],
+        "evidence_refs": [],
+        "lineage": unique_texts(
+            [
+                round_id,
+                maybe_text(blueprint.get("object_id")),
+                *[maybe_text(theme.get("object_id")) for theme in themes],
+            ]
+        ),
+        "provenance": {
+            "skill_name": SKILL_NAME,
+            "decision_source": "report-framing-round",
+            "artifact_path": str(output_file),
+        },
+    }
+
+
 def materialize_report_blueprint(args: argparse.Namespace) -> dict[str, Any]:
     run_dir = resolve_run_dir(args.run_dir)
     output_file = resolve_path(run_dir, args.output_path, f"reporting/report_blueprint_{args.round_id}.json")
@@ -452,6 +602,27 @@ def materialize_report_blueprint(args: argparse.Namespace) -> dict[str, Any]:
         else:
             index = themes.index(payload)
             themes[index] = obj
+    outcome_contract = report_outcome_contract_payload(
+        run_id=args.run_id,
+        round_id=args.round_id,
+        author_role=args.author_role,
+        blueprint=blueprint,
+        themes=themes,
+        output_file=output_file,
+    )
+    contract_result = append_dynamic_investigation_object_record(
+        run_dir,
+        object_payload=outcome_contract,
+        object_kind="report-outcome-contract",
+        artifact_path=str(output_file),
+        record_locator="$.report_outcome_contract",
+    )
+    outcome_contract = (
+        contract_result.get("object")
+        if isinstance(contract_result.get("object"), dict)
+        else outcome_contract
+    )
+    stored_ids.append(maybe_text(outcome_contract.get("object_id")))
     wrapper = {
         "schema_version": "report-framing-blueprint-materialization-v1",
         "skill": SKILL_NAME,
@@ -461,6 +632,7 @@ def materialize_report_blueprint(args: argparse.Namespace) -> dict[str, Any]:
         "status": "completed",
         "mission_focus": text,
         "report_blueprint": blueprint,
+        "report_outcome_contract": outcome_contract,
         "claim_slots": list_items(blueprint.get("claim_slots")),
         "investigation_themes": themes,
         "synthesis_targets": [
@@ -480,6 +652,7 @@ def materialize_report_blueprint(args: argparse.Namespace) -> dict[str, Any]:
             "No fetch, source family choice, query, skill route, or conclusion was selected by this framing output.",
             "Claim slots are mission-driven questions to answer, not fixed templates or expected conclusions.",
             "Investigation themes define claim-basis needs only; investigators author or adopt obligation plans without source/query precommitment.",
+            "The report outcome contract defines required theme reports and quality gates before evidence is collected or synthesized.",
             "Before investigation, role positions should adopt, narrow, or challenge the framing so the split is council-visible.",
         ],
         "artifact_refs": [
@@ -487,6 +660,11 @@ def materialize_report_blueprint(args: argparse.Namespace) -> dict[str, Any]:
                 "artifact_path": str(output_file),
                 "record_locator": "$.report_blueprint",
                 "artifact_ref": f"{output_file}:$.report_blueprint",
+            },
+            {
+                "artifact_path": str(output_file),
+                "record_locator": "$.report_outcome_contract",
+                "artifact_ref": f"{output_file}:$.report_outcome_contract",
             }
         ],
         "provenance": {
@@ -503,8 +681,10 @@ def materialize_report_blueprint(args: argparse.Namespace) -> dict[str, Any]:
             "round_id": args.round_id,
             "output_path": str(output_file),
             "blueprint_id": maybe_text(blueprint.get("blueprint_id")),
+            "report_outcome_contract_id": maybe_text(outcome_contract.get("contract_id")),
             "claim_slot_count": len(list_items(blueprint.get("claim_slots"))),
             "investigation_theme_count": len(themes),
+            "required_theme_report_count": len(list_items(outcome_contract.get("required_theme_reports"))),
         },
         "receipt_id": "report-blueprint-receipt-" + stable_hash(args.run_id, args.round_id, output_file)[:20],
         "artifact_refs": wrapper["artifact_refs"],
@@ -513,6 +693,7 @@ def materialize_report_blueprint(args: argparse.Namespace) -> dict[str, Any]:
         "council_handoff": {
             "object_refs": [
                 {"object_kind": "report-blueprint", "object_id": maybe_text(blueprint.get("object_id"))},
+                {"object_kind": "report-outcome-contract", "object_id": maybe_text(outcome_contract.get("object_id"))},
                 *[
                     {"object_kind": "investigation-theme", "object_id": maybe_text(theme.get("object_id"))}
                     for theme in themes
@@ -520,6 +701,7 @@ def materialize_report_blueprint(args: argparse.Namespace) -> dict[str, Any]:
             ],
             "suggested_next_skills": [
                 "submit-agent-position",
+                "synthesize-dossier-program",
                 "synthesize-council-investigation-program",
             ],
         },

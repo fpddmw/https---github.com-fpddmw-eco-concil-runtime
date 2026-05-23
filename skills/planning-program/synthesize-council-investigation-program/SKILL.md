@@ -11,6 +11,9 @@ council. The preferred path is agent-authored planning: agents submit
 or equivalent round proposals, and this skill adopts those proposals into later
 council agenda questions, round boundaries, descriptive internal phases, exit
 criteria, downgrade conditions, and restrained supplemental-round policy.
+The framing council is expected to expose report-editor,
+environmental-investigator, social-investigator, challenger, and moderator
+positions before the program is marked fully reviewable.
 
 If no agent-authored round proposals are visible, the skill can fall back to a
 blueprint-derived conservative program. That fallback is an operator recovery
@@ -46,7 +49,12 @@ python3 skills/planning-program/synthesize-council-investigation-program/scripts
 Outputs:
 
 - Deliberation DB object `council-investigation-program`
+- DB-backed projected `round-brief` objects for each round in the program
 - Artifact `runtime/council_investigation_program_<round_id>.json`
+- `human_review_packet` with the mission question, framing roles, missing role
+  positions, reviewable issue-round sequence, next-round suggestion, and
+  advisory quality checks. This packet is for operator/council review only; it
+  does not open rounds, authorize reporting, choose sources, or rank routes.
 
 ## Agent Reasoning Guide
 

@@ -32,6 +32,63 @@ MACHINE_PROSE_PREFIXES = (
     "environmental-investigator:",
     "social-investigator:",
 )
+SITUATION_ANALYSIS_CHAIN_FIELDS = (
+    "event_stage_map",
+    "fact_process_chain",
+    "official_action_chain",
+    "public_semantic_chain",
+    "policy_semantic_chain",
+    "interaction_claims",
+)
+SITUATION_ANALYSIS_CONSUMPTION_STOPWORDS = {
+    "about",
+    "action",
+    "analysis",
+    "answer",
+    "basis",
+    "bounded",
+    "brief",
+    "carried",
+    "chain",
+    "claim",
+    "claims",
+    "council",
+    "current",
+    "event",
+    "fact",
+    "from",
+    "mission",
+    "official",
+    "policy",
+    "process",
+    "public",
+    "question",
+    "report",
+    "semantic",
+    "situation",
+    "stage",
+    "summary",
+    "supports",
+    "that",
+    "the",
+    "this",
+    "with",
+}
+UNFINISHED_AUDIT_INDEX_TERMS = (
+    "audit pending",
+    "audit index pending",
+    "audit index incomplete",
+    "unfinished audit index",
+    "unresolved audit index",
+    "missing audit index",
+    "not yet indexed",
+    "todo audit",
+    "tbd audit",
+    "审计索引待补",
+    "审计索引未完成",
+    "审计索引缺失",
+    "未完成审计索引",
+)
 RAW_AUDIT_ID_RE = re.compile(
     r"\b(?:finding|evidence-bundle|review-comment|readiness-opinion|round-synthesis|agent-position|"
     r"challenge-disposition|runtimeevt|runtime-receipt|normalize-receipt|source-acquisition-proposal|"
@@ -899,6 +956,7 @@ NEGATION_CUES = (
     "\u4e0d\u5e94",
     "\u4e0d\u662f",
     "\u5e76\u975e",
+    "\u800c\u975e",
     "\u4e0d\u53ef",
     "\u672a\u80fd",
     "\u672a\u88ab\u8bb0\u5f55\u652f\u6491",
@@ -912,6 +970,30 @@ NEGATION_CUES = (
     "\u82e5\u8981",
     "\u9700\u8981\u8865\u5145",
     "\u9700\u8865\u5145",
+)
+POST_PHRASE_BOUNDARY_CUES = (
+    " exclusion boundary",
+    " excluded",
+    " exclusion",
+    " must be excluded",
+    " must not",
+    " cannot",
+    " should not",
+    " basis gap",
+    " downgraded",
+    " downgrade",
+    "\u6392\u9664\u8fb9\u754c",
+    "\u5f3a\u5236\u6392\u9664",
+    "\u4e0d\u5f97",
+    "\u4e0d\u80fd",
+    "\u4e0d\u5e94",
+    "\u4e0d\u662f",
+    "\u5e76\u975e",
+    "\u800c\u975e",
+    "\u4e0d\u4ee3\u8868",
+    "\u4e0d\u9002\u5408",
+    "\u964d\u7ea7",
+    "\u5199\u6210\u7f3a\u53e3",
 )
 
 
@@ -1030,9 +1112,20 @@ def normalized_text(text: str) -> str:
     return maybe_text(text).casefold()
 
 
+def significant_terms(text: str) -> set[str]:
+    return {
+        token
+        for token in re.findall(r"[a-z0-9][a-z0-9_-]{3,}", normalized_text(text))
+        if token not in SITUATION_ANALYSIS_CONSUMPTION_STOPWORDS
+    }
+
+
 def phrase_is_negated(text: str, start: int) -> bool:
     prefix = text[max(0, start - 120) : start]
-    return any(cue in prefix for cue in NEGATION_CUES)
+    suffix = text[start : min(len(text), start + 120)]
+    return any(cue in prefix for cue in NEGATION_CUES) or any(
+        cue in suffix for cue in POST_PHRASE_BOUNDARY_CUES
+    )
 
 
 def contains_unnegated_phrase(text: str, phrases: tuple[str, ...]) -> bool:
@@ -1225,6 +1318,140 @@ def theme_sufficiency_review_rows(draft: dict[str, Any]) -> list[dict[str, Any]]
 
 def theme_progress_review_rows(draft: dict[str, Any]) -> list[dict[str, Any]]:
     return source_material_list(draft, "theme_progress_reviews")
+
+
+def situation_analysis_brief_rows(draft: dict[str, Any]) -> list[dict[str, Any]]:
+    return source_material_list(draft, "situation_analysis_briefs")
+
+
+def situation_analysis_anchor_phrases(brief: dict[str, Any]) -> list[str]:
+    anchors: list[str] = [
+        maybe_text(brief.get("central_bounded_judgement")),
+        maybe_text(brief.get("mission_answerable_question")),
+    ]
+    for item in list_items(brief.get("recommended_report_spine")):
+        anchors.extend(strings_from(item))
+    for field_name in SITUATION_ANALYSIS_CHAIN_FIELDS:
+        for item in list_items(brief.get(field_name)):
+            anchors.extend(strings_from(item))
+    return [
+        text
+        for text in unique_texts(anchors)
+        if len(normalized_text(text)) >= 24
+    ]
+
+
+def situation_analysis_phrase_visible_in_prose(phrase: str, prose: str) -> bool:
+    phrase_text = normalized_text(phrase)
+    prose_text = normalized_text(prose)
+    if phrase_text and phrase_text in prose_text:
+        return True
+    phrase_terms = significant_terms(phrase_text)
+    if len(phrase_terms) < 4:
+        return False
+    prose_terms = significant_terms(prose_text)
+    overlap = phrase_terms & prose_terms
+    required = max(4, min(6, int(len(phrase_terms) * 0.6)))
+    return len(overlap) >= required
+
+
+def situation_analysis_brief_consumption_issues(draft: dict[str, Any]) -> list[dict[str, str]]:
+    briefs = situation_analysis_brief_rows(draft)
+    if not briefs:
+        return []
+    source_material = source_material_dict(draft)
+    reader_guidance = draft.get("reader_guidance") if isinstance(draft.get("reader_guidance"), dict) else {}
+    prefers_situation_brief = bool(source_material.get("situation_analysis_preferred")) or bool(
+        reader_guidance.get("situation_analysis_brief_first")
+    )
+    anchors = [
+        phrase
+        for brief in briefs
+        for phrase in situation_analysis_anchor_phrases(brief)
+    ]
+    if not anchors:
+        return []
+    prose = report_prose_text(draft)
+    carries_anchor = any(situation_analysis_phrase_visible_in_prose(phrase, prose) for phrase in anchors)
+    if prefers_situation_brief and carries_anchor:
+        return []
+    return [
+        issue(
+            "situation-analysis-brief-not-consumed",
+            (
+                "Situation-analysis brief is present, but reader-facing prose does not visibly carry "
+                "its mission answer or recommended report spine."
+            ),
+            "warning",
+        )
+    ]
+
+
+def situation_analysis_brief_quality_issues(draft: dict[str, Any]) -> list[dict[str, str]]:
+    issues: list[dict[str, str]] = []
+    briefs = situation_analysis_brief_rows(draft)
+    if not briefs:
+        return issues
+    if not any(maybe_text(brief.get("mission_answerable_question")) for brief in briefs):
+        issues.append(
+            issue(
+                "missing-situation-analysis-mission-question",
+                "Situation-analysis brief should preserve the mission-answerable question it is organizing the report around.",
+                "warning",
+            )
+        )
+    if not any(maybe_text(brief.get("central_bounded_judgement")) for brief in briefs):
+        issues.append(
+            issue(
+                "missing-mission-answer",
+                "Situation-analysis brief is present but does not state a central bounded judgement.",
+                "warning",
+            )
+        )
+    if not any(list_items(brief.get("recommended_report_spine")) for brief in briefs):
+        issues.append(
+            issue(
+                "weak-report-mainline",
+                "Situation-analysis brief is present but does not provide a recommended report spine.",
+                "warning",
+            )
+        )
+    missing_chain_fields = [
+        field_name
+        for field_name in SITUATION_ANALYSIS_CHAIN_FIELDS
+        if not any(list_items(brief.get(field_name)) for brief in briefs)
+    ]
+    if missing_chain_fields:
+        issues.append(
+            issue(
+                "situation-analysis-brief-missing-chain",
+                (
+                    "Situation-analysis brief should index fact, official-action, public-semantic, "
+                    "policy-semantic, interaction, and stage chains before narrative writing. "
+                    "Missing: "
+                    + ", ".join(missing_chain_fields)
+                    + "."
+                ),
+                "warning",
+            )
+        )
+    if not any(
+        list_items(brief.get("unresolved_claim_needs"))
+        or list_items(brief.get("downgraded_claims"))
+        or list_items(brief.get("forbidden_writing_upgrades"))
+        for brief in briefs
+    ):
+        issues.append(
+            issue(
+                "situation-analysis-unresolved-index-missing",
+                (
+                    "Situation-analysis brief should carry unresolved claim needs, downgraded claims, "
+                    "or forbidden writing upgrades so report validation can audit unfinished claim boundaries."
+                ),
+                "warning",
+            )
+        )
+    return issues
 
 
 def review_carried_by_council(row: dict[str, Any]) -> bool:
@@ -2338,6 +2565,46 @@ def official_action_or_governance_record_basis_visible(draft: dict[str, Any], *,
     )
 
 
+def explicit_policy_evaluation_basis_visible(
+    draft: dict[str, Any],
+    *,
+    run_dir: Path | None,
+) -> bool:
+    def has_policy_basis_marker(row: dict[str, Any]) -> bool:
+        text = "\n".join(strings_from(row))
+        return contains_any_phrase(text, POLICY_EVALUATION_BASIS_MARKERS) and not contains_any_phrase(
+            text,
+            INSUFFICIENT_BASIS_MARKERS,
+        )
+
+    for brief in situation_analysis_brief_rows(draft):
+        basis_rows = [
+            item
+            for item in list_items(brief.get("policy_evaluation_basis"))
+            if isinstance(item, dict)
+        ]
+        if any(has_policy_basis_marker(row) for row in basis_rows):
+            return True
+
+    for brief in section_brief_rows(draft):
+        refs = [
+            *list_items(brief.get("evidence_refs")),
+            *list_items(brief.get("basis_object_ids")),
+            *list_items(brief.get("refs")),
+        ]
+        if refs and has_policy_basis_marker(brief):
+            return True
+
+    for review in carried_theme_review_rows(draft):
+        if has_policy_basis_marker(review):
+            return True
+
+    for artifact in helper_artifacts_from_draft(draft, run_dir=run_dir):
+        if has_policy_basis_marker(artifact):
+            return True
+    return False
+
+
 def policy_evaluation_basis_visible(draft: dict[str, Any], *, run_dir: Path | None) -> bool:
     if not official_action_or_governance_record_basis_visible(draft, run_dir=run_dir):
         return False
@@ -2351,20 +2618,9 @@ def policy_evaluation_basis_visible(draft: dict[str, Any], *, run_dir: Path | No
             "readiness-opinion",
             "proposal",
         )
-    ) or claim_chain_basis_visible(draft):
+    ) or explicit_policy_evaluation_basis_visible(draft, run_dir=run_dir):
         return True
-    source_material = source_material_dict(draft)
-    combined = "\n".join(
-        [
-            "\n".join(strings_from(source_material)),
-            "\n".join(all_evidence_refs(draft)),
-            "\n".join(
-                "\n".join(strings_from(artifact))
-                for artifact in helper_artifacts_from_draft(draft, run_dir=run_dir)
-            ),
-        ]
-    )
-    return contains_any_phrase(combined, POLICY_EVALUATION_BASIS_MARKERS)
+    return False
 
 
 def responsibility_claim_present(text: str) -> bool:
@@ -3065,6 +3321,81 @@ def validate_draft(draft: dict[str, Any], *, run_dir: Path | None = None) -> lis
         issues.append(issue("missing-evidence-index", "Draft has no top-level evidence_refs index.", "warning"))
     if not isinstance(draft.get("audit_refs"), list) or not draft["audit_refs"]:
         issues.append(issue("missing-audit-refs", "Draft has no audit_refs index.", "warning"))
+    source_material = draft.get("source_material") if isinstance(draft.get("source_material"), dict) else {}
+    situation_briefs = situation_analysis_brief_rows(draft)
+    if not situation_briefs and not bool(source_material.get("not_situation_analysis_report")):
+        issues.append(
+            issue(
+                "missing-situation-analysis-brief",
+                "Situation-analysis reports should carry a situation-analysis brief before narrative report writing.",
+                "warning",
+            )
+        )
+        issues.append(
+            issue(
+                "weak-report-mainline",
+                "Validator cannot see a situation-analysis report spine; draft may be assembling sections from scattered objects rather than a mission-answering analysis line.",
+                "warning",
+            )
+        )
+    elif situation_briefs:
+        issues.extend(situation_analysis_brief_quality_issues(draft))
+        issues.extend(situation_analysis_brief_consumption_issues(draft))
+    instruction_residue_phrases = (
+        "本节应",
+        "报告应",
+        "应当说明",
+        "should describe",
+        "should explain",
+        "should state",
+        "TODO",
+        "see JSON",
+    )
+    if any(
+        phrase in maybe_text(paragraph)
+        for paragraph in all_paragraphs
+        for phrase in instruction_residue_phrases
+    ):
+        issues.append(
+            issue(
+                "instruction-residue",
+                "Draft appears to retain writing instructions or unfinished audit handoff text.",
+                "warning",
+            )
+        )
+    runtime_meta_terms = ("runtime", "ledger", "object_id", "round_id", "schema_version", "handoff_id")
+    runtime_meta_hits = sum(
+        maybe_text(paragraph).casefold().count(term)
+        for paragraph in all_paragraphs
+        for term in runtime_meta_terms
+    )
+    if runtime_meta_hits > 8:
+        issues.append(
+            issue(
+                "runtime-meta-language-too-dense",
+                "Draft body contains dense runtime or object metadata language; reader-facing prose should foreground the situation analysis.",
+                "warning",
+            )
+        )
+    audit_trail = section_by_id(draft, "audit-trail")
+    audit_index_text = "\n".join(
+        [
+            "\n".join(maybe_text(ref) for ref in list_items(draft.get("audit_refs"))),
+            "\n".join(
+                maybe_text(paragraph)
+                for paragraph in list_items(audit_trail.get("paragraphs"))
+            ),
+            "\n".join(strings_from(source_material.get("audit_index"))),
+        ]
+    )
+    if contains_any_phrase(audit_index_text, UNFINISHED_AUDIT_INDEX_TERMS):
+        issues.append(
+            issue(
+                "unfinished-audit-index",
+                "Draft appears to carry an unfinished audit index marker; resolve or scope it before final publication.",
+                "warning",
+            )
+        )
     issues.extend(validate_claim_boundary_semantics(draft, run_dir=run_dir))
     if run_dir is not None:
         issues.extend(public_discourse_summary_contract_issues(draft, run_dir=run_dir))

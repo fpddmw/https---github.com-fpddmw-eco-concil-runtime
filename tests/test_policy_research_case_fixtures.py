@@ -832,7 +832,7 @@ class PolicyResearchCaseFixtureTests(unittest.TestCase):
                     self.assertEqual([], result["frozen_report_basis"]["expanded_evidence_bundle_ids"])
                     self.assertEqual(0, result["frozen_report_basis"]["expanded_evidence_bundle_ref_count"])
                     self.assertEqual(
-                        "explicit-agent-council-evidence-refs-only-v1",
+                        "explicit-council-basis-and-linked-bundle-refs-v2",
                         result["frozen_report_basis"]["evidence_selection_policy"],
                     )
                     case_intent_text = " ".join(
@@ -848,23 +848,17 @@ class PolicyResearchCaseFixtureTests(unittest.TestCase):
                         token in case_intent_text
                         for token in ("response", "recommendation", "handling")
                     ):
-                        self.assertTrue(
-                            set(result["cross_plane_evidence_refs"]).issubset(
-                                set(result["frozen_report_basis"]["selected_evidence_refs"])
-                            )
-                        )
                         self.assertGreaterEqual(
                             result["frozen_report_basis"][
                                 "explicit_report_section_draft_evidence_ref_count"
                             ],
                             3,
                         )
-                    else:
-                        self.assertFalse(
-                            set(result["cross_plane_evidence_refs"]).issubset(
-                                set(result["frozen_report_basis"]["selected_evidence_refs"])
-                            )
+                    self.assertTrue(
+                        set(result["cross_plane_evidence_refs"]).issubset(
+                            set(result["frozen_report_basis"]["selected_evidence_refs"])
                         )
+                    )
                     self.assertTrue(
                         any(
                             item.get("object_kind") == "finding-record"

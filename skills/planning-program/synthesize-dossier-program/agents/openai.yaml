@@ -1,0 +1,2 @@
+name: synthesize-dossier-program
+default_prompt: "Use $synthesize-dossier-program after report outcome contract, investigation themes, and role-separated framing positions are visible. Produce dossier-first theme cycles with acquisition, structuring, analysis, theme-report, challenger review, and moderator adoption. Do not preselect provider classes, source skills, queries, route rankings, queues, or automatic execution."

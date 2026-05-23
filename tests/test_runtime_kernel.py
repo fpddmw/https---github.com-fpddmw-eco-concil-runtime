@@ -348,6 +348,19 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertEqual("Eco Materialize Reporting Handoff", handoff_entry["agent"]["display_name"])
             self.assertEqual("materialize-reporting-handoff", handoff_entry["skill_access"]["skill_name"])
             self.assertIn("report-editor", handoff_entry["skill_access"]["allowed_roles"])
+            situation_entry = next(
+                item
+                for item in registry["skills"]
+                if item["skill_name"] == "materialize-situation-analysis-brief"
+            )
+            self.assertEqual(
+                "reporting",
+                situation_entry["skill_access"]["skill_category"],
+            )
+            self.assertIn(
+                "skills/reporting/materialize-situation-analysis-brief",
+                Path(str(situation_entry["physical_path"])).as_posix(),
+            )
 
             proposal_entry = next(item for item in registry["skills"] if item["skill_name"] == "submit-council-proposal")
             self.assertIn("evidence_ref", proposal_entry["declared_inputs"]["required"])
@@ -383,6 +396,33 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertIn("argv", event["command_snapshot"])
             self.assertTrue(event["execution_input_hash"])
             self.assertTrue(event["payload_hash"])
+
+            situation_help = run_kernel(
+                "run-skill",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--skill-name",
+                "materialize-situation-analysis-brief",
+                "--actor-role",
+                "report-editor",
+                "--",
+                "--help",
+            )
+            self.assertEqual("completed", situation_help["status"])
+            self.assertEqual(
+                "materialize-situation-analysis-brief",
+                situation_help["summary"]["skill_name"],
+            )
+            self.assertIn(
+                "skills/reporting/materialize-situation-analysis-brief",
+                Path(
+                    str(situation_help["event"]["command_snapshot"]["script_path"])
+                ).as_posix(),
+            )
 
     def test_kernel_captures_standalone_fetch_output_without_runtime_flags(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

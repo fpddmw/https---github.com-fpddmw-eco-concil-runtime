@@ -260,7 +260,8 @@ class OptionalAnalysisGuardrailTests(unittest.TestCase):
         for skill_name in REMOVED_LEGACY_SKILLS:
             with self.subTest(skill=skill_name):
                 self.assertNotIn(skill_name, registered)
-                self.assertFalse((script_path(skill_name)).exists())
+                with self.assertRaises(ValueError):
+                    script_path(skill_name)
 
     def test_review_evidence_sufficiency_reads_db_objects_without_gate_scores(self) -> None:
         from eco_council_runtime.objects.council import (

@@ -26,10 +26,7 @@ def script_path(skill_name: str) -> Path:
         sys.path.insert(0, str(runtime_src))
     from eco_council_runtime.kernel.core.registry import resolve_skill_script
 
-    try:
-        return resolve_skill_script(skill_name, WORKSPACE_ROOT)
-    except ValueError:
-        return WORKSPACE_ROOT / "skills" / skill_name / "scripts" / f"{skill_name.replace('-', '_')}.py"
+    return resolve_skill_script(skill_name, WORKSPACE_ROOT)
 
 
 def run_script(script: Path, *args: str) -> dict[str, Any]:

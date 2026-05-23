@@ -52,6 +52,11 @@ from eco_council_runtime.kernel.governance.transition_requests import (  # noqa:
     resolve_transition_request_for_execution,
 )
 from eco_council_runtime.objects.council import query_council_objects  # noqa: E402
+from eco_council_runtime.objects.council.payloads import (  # noqa: E402
+    PHASE_STATE_MACHINE_FIELDS,
+    validate_agent_responsibility_boundaries,
+    validate_round_internal_phase_semantics,
+)
 
 
 def normalize_space(value: Any) -> str:
@@ -260,6 +265,32 @@ def build_round_coordination_context(
     }
 
 
+def validate_round_coordination_context(context: dict[str, Any]) -> None:
+    boundaries = text_values(context.get("agent_responsibility_boundaries"))
+    if boundaries:
+        validate_agent_responsibility_boundaries(
+            "open-investigation-round coordination_context",
+            boundaries,
+        )
+    phases = text_values(context.get("round_internal_phases"))
+    if phases:
+        validate_round_internal_phase_semantics(
+            "open-investigation-round coordination_context",
+            phases,
+        )
+        lowered = " ".join(phases).casefold()
+        matched_state_fields = [
+            field_name for field_name in PHASE_STATE_MACHINE_FIELDS if field_name in lowered
+        ]
+        if matched_state_fields:
+            raise ValueError(
+                "open-investigation-round coordination_context round_internal_phases "
+                "are descriptive organization hints only, not a runtime state "
+                "machine or hard gate. Remove: "
+                + ", ".join(sorted(set(matched_state_fields)))
+            )
+
+
 def coordination_related_ids(context: dict[str, Any]) -> list[str]:
     if not isinstance(context, dict):
         return []
@@ -289,6 +320,28 @@ def coordination_is_acquisition_round(context: dict[str, Any]) -> bool:
         or "data-acquisition" in category
         or "acquisition" in mode
     )
+
+
+def coordination_is_issue_council_context(context: dict[str, Any]) -> bool:
+    if not isinstance(context, dict) or coordination_is_acquisition_round(context):
+        return False
+    has_issue_signal = any(
+        [
+            maybe_text(context.get("program_id")),
+            maybe_text(context.get("round_mode")),
+            maybe_text(context.get("round_title")),
+            maybe_text(context.get("round_subtitle_question")),
+            maybe_text(context.get("round_category")),
+            maybe_text(context.get("round_brief_id")),
+            text_values(context.get("active_theme_ids")),
+            text_values(context.get("round_internal_phases")),
+            text_values(context.get("agent_responsibility_boundaries")),
+        ]
+    )
+    if not has_issue_signal:
+        return False
+    status = maybe_text(context.get("context_status")).casefold()
+    return status != "minimal"
 
 
 def role_boundaries_from_context(context: dict[str, Any]) -> dict[str, list[str]]:
@@ -749,7 +802,7 @@ def build_followup_round_tasks(
         role: [item for item in action_items(next_actions) if maybe_text(item.get("assigned_role")) == role]
         for role in COUNCIL_ROLES
     }
-    if task_coordination_context and not coordination_is_acquisition_round(task_coordination_context):
+    if coordination_is_issue_council_context(task_coordination_context):
         return (
             program_issue_council_tasks(
                 run_id=run_id,
@@ -998,6 +1051,7 @@ def open_investigation_round_skill(
         unresolved_responsibility_boundary_refs=unresolved_responsibility_boundary_refs or [],
         parent_theme_progress_review_refs=parent_theme_progress_review_refs or [],
     )
+    validate_round_coordination_context(coordination_context)
     coordination_ids = coordination_related_ids(coordination_context)
 
     warnings: list[dict[str, str]] = []

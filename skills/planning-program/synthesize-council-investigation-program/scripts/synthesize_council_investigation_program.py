@@ -21,9 +21,11 @@ from eco_council_runtime.objects.council import append_dynamic_investigation_obj
 
 
 EXPECTED_POSITION_ROLES = (
+    "report-editor",
     "environmental-investigator",
     "social-investigator",
     "challenger",
+    "moderator",
 )
 
 FORBIDDEN_SCHEDULER_FIELDS = (
@@ -1119,6 +1121,147 @@ def round_brief_payload_from_program_round(
     }
 
 
+def round_review_row(round_item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "round_id": maybe_text(round_item.get("round_id")),
+        "round_title": maybe_text(round_item.get("round_title")),
+        "round_subtitle_question": maybe_text(round_item.get("round_subtitle_question")),
+        "round_category": maybe_text(round_item.get("round_category")),
+        "round_mode": maybe_text(round_item.get("round_mode")),
+        "active_theme_ids": unique_texts(list_items(round_item.get("active_theme_ids"))),
+        "agent_responsibility_boundary_count": len(
+            list_items(round_item.get("agent_responsibility_boundaries"))
+        ),
+        "round_internal_phases": unique_texts(list_items(round_item.get("round_internal_phases"))),
+        "round_exit_criteria": unique_texts(list_items(round_item.get("round_exit_criteria"))),
+    }
+
+
+def next_issue_round_suggestion(round_sequence: list[dict[str, Any]]) -> dict[str, Any]:
+    for round_item in round_sequence:
+        category = maybe_text(round_item.get("round_category"))
+        if category not in {"planning", "reporting"}:
+            return round_review_row(round_item)
+    return {}
+
+
+def program_quality_review(
+    *,
+    program: dict[str, Any],
+    materialized_round_briefs: list[dict[str, Any]],
+    missing_roles: list[str],
+) -> dict[str, Any]:
+    round_sequence = [
+        item for item in list_items(program.get("round_sequence")) if isinstance(item, dict)
+    ]
+    question_form_failures = [
+        maybe_text(item.get("round_id")) or f"round-index-{index}"
+        for index, item in enumerate(round_sequence)
+        if not maybe_text(item.get("round_subtitle_question")).endswith(("?", "？"))
+    ]
+    empty_boundary_rounds = [
+        maybe_text(item.get("round_id")) or f"round-index-{index}"
+        for index, item in enumerate(round_sequence)
+        if not list_items(item.get("agent_responsibility_boundaries"))
+    ]
+    forbidden_paths = forbidden_field_paths(program)
+    checks = {
+        "first_round_is_framing_scope": bool(round_sequence)
+        and maybe_text(round_sequence[0].get("round_id")) == "round-001-framing-scope"
+        and maybe_text(round_sequence[0].get("round_category")) == "planning",
+        "has_issue_round_before_reporting": any(
+            maybe_text(item.get("round_category")) not in {"planning", "reporting"}
+            for item in round_sequence
+        ),
+        "has_reporting_round": any(
+            maybe_text(item.get("round_category")) == "reporting"
+            for item in round_sequence
+        ),
+        "round_brief_projection_complete": len(materialized_round_briefs) == len(round_sequence),
+        "round_questions_are_question_form": not question_form_failures,
+        "responsibility_boundaries_present": not empty_boundary_rounds,
+        "forbidden_scheduler_field_paths_absent": not forbidden_paths,
+    }
+    review_status = "reviewable"
+    if forbidden_paths or question_form_failures or not checks["round_brief_projection_complete"]:
+        review_status = "needs-correction"
+    elif missing_roles or empty_boundary_rounds:
+        review_status = "reviewable-with-framing-gaps"
+    return {
+        "schema_version": "council-program-quality-review-v1",
+        "review_status": review_status,
+        "checks": checks,
+        "missing_agent_position_roles": missing_roles,
+        "question_form_failure_round_ids": question_form_failures,
+        "empty_responsibility_boundary_round_ids": empty_boundary_rounds,
+        "forbidden_scheduler_field_paths": forbidden_paths,
+        "review_boundary": {
+            "advisory_only": True,
+            "does_not_open_round": True,
+            "does_not_authorize_reporting": True,
+            "does_not_choose_sources_or_queries": True,
+        },
+    }
+
+
+def human_review_packet(
+    *,
+    program: dict[str, Any],
+    materialized_round_briefs: list[dict[str, Any]],
+    missing_roles: list[str],
+) -> dict[str, Any]:
+    round_sequence = [
+        item for item in list_items(program.get("round_sequence")) if isinstance(item, dict)
+    ]
+    issue_rounds = [
+        round_review_row(item)
+        for item in round_sequence
+        if maybe_text(item.get("round_category")) not in {"planning", "reporting"}
+    ]
+    reporting_rounds = [
+        round_review_row(item)
+        for item in round_sequence
+        if maybe_text(item.get("round_category")) == "reporting"
+    ]
+    quality = program_quality_review(
+        program=program,
+        materialized_round_briefs=materialized_round_briefs,
+        missing_roles=missing_roles,
+    )
+    return {
+        "schema_version": "council-program-human-review-v1",
+        "program_id": maybe_text(program.get("program_id")),
+        "object_kind": "council-investigation-program",
+        "framing_round_id": maybe_text(program.get("round_id")),
+        "mission_question": maybe_text(program.get("mission_question")),
+        "program_synthesis_mode": maybe_text(program.get("program_synthesis_mode")),
+        "adoption_status": maybe_text(program.get("adoption_status")),
+        "framing_position_roles": unique_texts(list_items(program.get("framing_position_roles"))),
+        "missing_agent_position_roles": missing_roles,
+        "theme_thread_count": len(list_items(program.get("theme_threads"))),
+        "agenda_question_count": len(list_items(program.get("council_agenda_questions"))),
+        "round_count": len(round_sequence),
+        "materialized_round_brief_count": len(materialized_round_briefs),
+        "planning_round": round_review_row(round_sequence[0]) if round_sequence else {},
+        "issue_rounds": issue_rounds,
+        "reporting_round": reporting_rounds[0] if reporting_rounds else {},
+        "next_round_suggestion": next_issue_round_suggestion(round_sequence),
+        "quality_review": quality,
+        "operator_review_notes": [
+            "Confirm missing roles, if any, before adopting this program for later council rounds.",
+            "Confirm issue rounds express agenda and responsibility boundaries, not acquisition route instructions.",
+            "Open the next issue round through transition approval; this packet is only review context.",
+        ],
+        "program_boundary": {
+            "not_scheduler": True,
+            "not_source_plan": True,
+            "not_query_plan": True,
+            "not_action_queue": True,
+            "round_internal_phases_are_context_only": True,
+        },
+    }
+
+
 def synthesize_program(args: argparse.Namespace) -> dict[str, Any]:
     run_dir = resolve_run_dir(args.run_dir)
     output_file = resolve_path(
@@ -1296,6 +1439,11 @@ def synthesize_program(args: argparse.Namespace) -> dict[str, Any]:
         stored_brief = dict_items(brief_result.get("object"))
         if stored_brief:
             materialized_round_briefs.append(stored_brief)
+    review_packet = human_review_packet(
+        program=stored_program,
+        materialized_round_briefs=materialized_round_briefs,
+        missing_roles=missing_roles,
+    )
     wrapper = {
         "schema_version": "council-investigation-program-materialization-v1",
         "skill": SKILL_NAME,
@@ -1306,6 +1454,8 @@ def synthesize_program(args: argparse.Namespace) -> dict[str, Any]:
         "council_investigation_program": stored_program,
         "program_round_sequence": list_items(stored_program.get("round_sequence")),
         "materialized_round_briefs": materialized_round_briefs,
+        "human_review_packet": review_packet,
+        "program_quality_review": dict_items(review_packet.get("quality_review")),
         "missing_agent_position_roles": missing_roles,
         "program_boundaries": [
             "Program questions become council agenda questions, not fixed report sections or task queues.",
@@ -1349,6 +1499,9 @@ def synthesize_program(args: argparse.Namespace) -> dict[str, Any]:
             "materialized_round_brief_count": len(materialized_round_briefs),
             "agenda_question_count": len(list_items(stored_program.get("council_agenda_questions"))),
             "missing_agent_position_roles": missing_roles,
+            "human_review_status": maybe_text(
+                dict_items(review_packet.get("quality_review")).get("review_status")
+            ),
             "output_path": str(output_file),
             "db_path": maybe_text(result.get("db_path")),
         },
@@ -1382,6 +1535,7 @@ def synthesize_program(args: argparse.Namespace) -> dict[str, Any]:
                     for brief in materialized_round_briefs
                 ],
             ],
+            "human_review_packet": review_packet,
             "suggested_next_skills": ["submit-round-brief", "open-investigation-round"],
         },
     }

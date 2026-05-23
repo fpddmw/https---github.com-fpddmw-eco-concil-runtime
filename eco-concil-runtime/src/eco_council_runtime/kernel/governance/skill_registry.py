@@ -938,7 +938,11 @@ POLICIES.update(
             side_effect_scope=["artifact-write", "db-write:deliberation"],
             db_write_planes=["deliberation"],
             input_object_kinds=["mission", "round"],
-            output_object_kinds=["report-blueprint", "investigation-theme"],
+            output_object_kinds=[
+                "report-blueprint",
+                "report-outcome-contract",
+                "investigation-theme",
+            ],
             write_scope=WRITE_SCOPE_DELIBERATION,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
@@ -955,6 +959,23 @@ POLICIES.update(
                 "agent-position",
             ],
             output_object_kinds=["council-investigation-program"],
+            write_scope=WRITE_SCOPE_DELIBERATION,
+            default_actor_role_hint=ROLE_MODERATOR,
+        ),
+        "synthesize-dossier-program": _policy(
+            skill_name="synthesize-dossier-program",
+            skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
+            allowed_roles=[ROLE_MODERATOR],
+            required_capabilities=[CAPABILITY_DISCUSSION_WRITE],
+            side_effect_scope=["artifact-write", "db-read", "db-write:deliberation"],
+            db_write_planes=["deliberation"],
+            input_object_kinds=[
+                "report-outcome-contract",
+                "report-blueprint",
+                "investigation-theme",
+                "agent-position",
+            ],
+            output_object_kinds=["dossier-program", "round-brief"],
             write_scope=WRITE_SCOPE_DELIBERATION,
             default_actor_role_hint=ROLE_MODERATOR,
         ),
@@ -1302,6 +1323,25 @@ POLICIES.update(
             write_scope=WRITE_SCOPE_REPORTING,
             requires_operator_approval=True,
             default_actor_role_hint=ROLE_MODERATOR,
+        ),
+        "materialize-situation-analysis-brief": _policy(
+            skill_name="materialize-situation-analysis-brief",
+            skill_layer=SKILL_LAYER_REPORTING,
+            allowed_roles=[ROLE_MODERATOR, ROLE_REPORT_EDITOR],
+            required_capabilities=[CAPABILITY_REPORT_DRAFT],
+            side_effect_scope=["artifact-write", "db-read", "db-write:reporting"],
+            db_write_planes=["reporting"],
+            input_object_kinds=[
+                "council-investigation-program",
+                "theme-progress-review",
+                "agent-section-brief",
+                "report-basis-freeze",
+                "challenge",
+                "review-comment",
+            ],
+            output_object_kinds=["situation-analysis-brief"],
+            write_scope=WRITE_SCOPE_REPORTING,
+            default_actor_role_hint=ROLE_REPORT_EDITOR,
         ),
         "draft-agent-section-brief": _policy(
             skill_name="draft-agent-section-brief",
@@ -1994,6 +2034,7 @@ for _skill_name, _policy_payload in POLICIES.items():
 PLANNING_PROGRAM_SKILLS = {
     "materialize-report-blueprint",
     "synthesize-council-investigation-program",
+    "synthesize-dossier-program",
     "submit-round-brief",
     "submit-theme-evidence-boundary-plan",
     "review-theme-sufficiency",
@@ -2253,6 +2294,40 @@ def skill_registry_snapshot(root: Path | None = None) -> dict[str, Any]:
     }
 
 
+def skill_taxonomy_manifest(root: Path | None = None) -> dict[str, Any]:
+    resolved_root = (root or workspace_root()).resolve()
+    snapshot = skill_registry_snapshot(resolved_root)
+    manifest_skills: list[dict[str, Any]] = []
+    for skill in snapshot.get("skills", []):
+        if not isinstance(skill, dict):
+            continue
+        physical_path = Path(maybe_text(skill.get("physical_path")))
+        try:
+            relative_path = physical_path.resolve().relative_to(resolved_root)
+        except ValueError:
+            relative_path = physical_path
+        manifest_skills.append(
+            {
+                "skill_name": maybe_text(skill.get("skill_name")),
+                "skill_category": maybe_text(skill.get("skill_category")),
+                "skill_family": maybe_text(skill.get("skill_family")),
+                "skill_layer": maybe_text(skill.get("skill_layer")),
+                "workflow_stage": maybe_text(skill.get("workflow_stage")),
+                "write_scope": maybe_text(skill.get("write_scope")),
+                "physical_path": relative_path.as_posix(),
+            }
+        )
+    return {
+        "schema_version": "openclaw-skill-taxonomy-manifest-v1",
+        "public_identifier": "skill_name",
+        "discovery_rule": "skills/**/SKILL.md with skill name taken from the skill directory name",
+        "compatibility_aliases": [],
+        "skill_count": len(manifest_skills),
+        "category_counts": snapshot.get("skill_category_counts", {}),
+        "skills": sorted(manifest_skills, key=lambda item: item["skill_name"]),
+    }
+
+
 __all__ = [
     "POLICIES",
     "SKILL_LAYER_DELIBERATION_WRITE",
@@ -2297,6 +2372,7 @@ __all__ = [
     "skill_directory",
     "skill_directory_index",
     "skill_registry_snapshot",
+    "skill_taxonomy_manifest",
     "skill_boundary_violations",
     "skill_requires_write_actor_role",
     "skill_write_scope",

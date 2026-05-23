@@ -342,7 +342,29 @@ class AgentEntryGateTests(unittest.TestCase):
                 "--rationale",
                 "Moderator exposes non-binding round context.",
                 "--round-mode",
-                "investigation",
+                "issue-council",
+                "--round-category",
+                "issue-deliberation",
+                "--round-title",
+                "Public semantic issue council",
+                "--round-subtitle-question",
+                "Which public semantic denominator boundary remains unresolved?",
+                "--program-id",
+                "council-program-agent-entry-001",
+                "--active-theme-id",
+                "theme-public-semantics",
+                "--round-internal-phase",
+                "agent-acquisition-turns",
+                "--round-internal-phase",
+                "agent-analysis-turns",
+                "--round-internal-phase",
+                "progress-review",
+                "--round-exit-criterion",
+                "Theme is supported, downgraded, scoped out, or carried forward.",
+                "--agent-responsibility-boundary",
+                "social-investigator: explain public semantic denominator and downgrade boundary.",
+                "--agent-responsibility-boundary",
+                "challenger: review denominator dispute and overclaim risk.",
                 "--context-packet-id",
                 context_packet["summary"]["object_id"],
                 "--primary-focus-ref",
@@ -355,6 +377,81 @@ class AgentEntryGateTests(unittest.TestCase):
                 "What additional evidence would clarify timing?",
                 "--brief-text",
                 "Use this as context, not a hard agenda.",
+            )
+            progress_payload = run_kernel(
+                "submit-dynamic-investigation-object",
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--actor-role",
+                "moderator",
+                "--object-kind",
+                "theme-progress-review",
+                "--author-role",
+                "moderator",
+                "--target-kind",
+                "investigation-theme",
+                "--target-id",
+                "theme-public-semantics",
+                "--rationale",
+                "Expose advisory theme progress for agent entry.",
+                "--payload-json",
+                json.dumps(
+                    {
+                        "object_id": "theme-progress-review-agent-entry-001",
+                        "review_id": "theme-progress-review-agent-entry-001",
+                        "decision_source": "approved-helper-view",
+                        "program_id": "council-program-agent-entry-001",
+                        "round_brief_id": brief_payload["summary"]["object_id"],
+                        "active_theme_id": "theme-public-semantics",
+                        "analysis_status": "requires-supplemental-council-uptake",
+                        "denominator_status": "missing-or-not-yet-carried",
+                        "recommended_disposition": "needs-supplemental-round",
+                        "summary": (
+                            "Advisory only; council uptake and transition "
+                            "approval are required before opening a supplemental round."
+                        ),
+                        "agent_responsibility_status": [
+                            "social-investigator denominator boundary unresolved",
+                            "challenger overclaim review unresolved",
+                        ],
+                        "available_basis_refs": ["round-brief-agent-entry-001"],
+                        "coverage_or_policy_lane_limits": [
+                            "denominator dispute remains unresolved"
+                        ],
+                        "in_round_recovery_options": [
+                            "Record whether current-round recovery remains possible."
+                        ],
+                        "supplemental_round_recommendation": [
+                            {
+                                "active_theme_id": "theme-public-semantics",
+                                "allowed_only_after_council_uptake": True,
+                                "transition_payload_suggestion": {
+                                    "program_id": "council-program-agent-entry-001",
+                                    "active_theme_ids": ["theme-public-semantics"],
+                                    "parent_theme_progress_review_refs": [
+                                        "theme-progress-review-agent-entry-001"
+                                    ],
+                                    "round_mode": "supplemental-issue-council",
+                                    "round_category": "supplemental-issue-deliberation",
+                                    "requires_transition_approval": True,
+                                    "does_not_auto_execute": True,
+                                },
+                            }
+                        ],
+                        "evidence_refs": [],
+                        "lineage": [brief_payload["summary"]["object_id"]],
+                        "provenance": {
+                            "source": "unit-test",
+                            "decision_source": "approved-helper-view",
+                        },
+                    },
+                    ensure_ascii=True,
+                    sort_keys=True,
+                ),
             )
 
             payload = run_kernel(
@@ -410,15 +507,60 @@ class AgentEntryGateTests(unittest.TestCase):
             )
             self.assertIn("does not restrict", coordination["semantics"])
             self.assertEqual(
+                "council-program-agent-entry-001",
+                coordination["program_context"]["program_id"],
+            )
+            self.assertEqual(
+                "Which public semantic denominator boundary remains unresolved?",
+                coordination["program_context"]["round_subtitle_question"],
+            )
+            self.assertEqual(
+                ["theme-public-semantics"],
+                coordination["program_context"]["active_theme_ids"],
+            )
+            self.assertIn(
+                "needs-supplemental-round",
+                coordination["program_context"]["theme_progress_dispositions"],
+            )
+            self.assertEqual(
+                progress_payload["summary"]["object_id"],
+                coordination["program_context"]["theme_progress_reviews"][0][
+                    "object_id"
+                ],
+            )
+            self.assertTrue(
+                coordination["program_context"]["runtime_boundary"][
+                    "does_not_filter_source_selection"
+                ]
+            )
+            self.assertEqual(
                 ["Do not narrow legal read or write surfaces."],
                 coordination["latest_round_brief"]["source_boundary_notes"],
             )
             self.assertIn("query-council-objects", social_read_surface)
             self.assertIn("--object-kind round-brief", social_read_surface)
             self.assertIn("--object-kind round-synthesis", social_read_surface)
+            self.assertIn("--object-kind theme-evidence-boundary-plan", social_read_surface)
+            self.assertIn("--object-kind theme-progress-review", social_read_surface)
             self.assertIn("--object-kind context-packet", social_read_surface)
             self.assertIn("--object-kind source-acquisition-proposal", social_read_surface)
             self.assertIn("--object-kind challenge-disposition", challenger_read_surface)
+            self.assertEqual(
+                "council-program-agent-entry-001",
+                social_entry["program_coordination_context"]["program_id"],
+            )
+            self.assertIn(
+                "explain public semantic denominator",
+                social_entry["program_coordination_context"][
+                    "role_responsibility_boundaries"
+                ][0],
+            )
+            self.assertIn(
+                "review denominator dispute",
+                challenger_entry["program_coordination_context"][
+                    "role_responsibility_boundaries"
+                ][0],
+            )
             self.assertIn("materialize-context-packet", moderator_write_surface)
             self.assertIn("submit-round-synthesis", moderator_write_surface)
             self.assertIn("submit-evidence-request", social_write_surface)
@@ -442,6 +584,26 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn(
                 "--object-kind round-brief",
                 state_payload["agent_entry"]["operator"]["query_round_briefs_command"],
+            )
+            self.assertEqual(
+                "council-program-agent-entry-001",
+                state_payload["agent_entry"]["operator"]["program_id"],
+            )
+            self.assertEqual(
+                ["theme-public-semantics"],
+                state_payload["agent_entry"]["operator"]["program_active_theme_ids"],
+            )
+            self.assertIn(
+                "needs-supplemental-round",
+                state_payload["agent_entry"]["operator"][
+                    "program_theme_progress_dispositions"
+                ],
+            )
+            self.assertIn(
+                "--object-kind theme-progress-review",
+                state_payload["agent_entry"]["operator"][
+                    "query_theme_progress_reviews_command"
+                ],
             )
             self.assertIn(
                 "--object-kind round-synthesis",
@@ -744,6 +906,11 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("physical source attribution", report_editor_boundary_surface)
             report_editor_write_surface = "\n".join(report_editor_entries[0].get("write_commands", []))
             self.assertIn("submit-agent-position", report_editor_write_surface)
+            self.assertIn("materialize-situation-analysis-brief", report_editor_write_surface)
+            self.assertLess(
+                report_editor_write_surface.index("materialize-situation-analysis-brief"),
+                report_editor_write_surface.index("draft-narrative-report"),
+            )
             self.assertIn("--actor-role report-editor", report_editor_write_surface)
             self.assertNotIn("submit-readiness-opinion", report_editor_write_surface)
             self.assertIn(
@@ -1272,7 +1439,13 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("start-council-run", runbook_text)
             self.assertIn("## Report Publication Checklist", runbook_text)
             self.assertIn("show-reporting-state", runbook_text)
+            self.assertIn("situation-analysis-brief", runbook_text)
+            self.assertIn("materialize-situation-analysis-brief", runbook_text)
             self.assertIn("draft-narrative-report", runbook_text)
+            self.assertLess(
+                runbook_text.index("materialize-situation-analysis-brief"),
+                runbook_text.index("draft-narrative-report"),
+            )
             self.assertIn("validate-narrative-report", runbook_text)
             self.assertIn("publish-narrative-report", runbook_text)
             self.assertIn("materialize-final-publication", runbook_text)

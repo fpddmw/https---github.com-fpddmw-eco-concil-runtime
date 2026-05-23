@@ -31,12 +31,62 @@ from eco_council_runtime.kernel.source_queue.source_queue_history import (  # no
     load_round_tasks_wrapper,
 )
 from eco_council_runtime.kernel.source_queue.source_queue_selection import build_source_selections  # noqa: E402
+from eco_council_runtime.kernel.planes.deliberation_plane import load_round_transition_record  # noqa: E402
 from eco_council_runtime.objects.council import query_council_objects  # noqa: E402
 
 
 ROUND_BRIEF_HINT_SEMANTICS = (
     "Optional coordination context only; it does not restrict agent write "
     "surfaces, source selection, evidence acceptance, or investigator autonomy."
+)
+
+PROGRAM_COORDINATION_CONTEXT_SEMANTICS = (
+    "Program, theme, and supplemental fields are handoff context only. They do "
+    "not select source families, source skills, queries, route rankings, "
+    "scheduler queues, or evidence uptake."
+)
+
+COORDINATION_TEXT_FIELDS = (
+    "round_mode",
+    "program_id",
+    "round_title",
+    "round_subtitle_question",
+    "round_category",
+    "context_packet_id",
+    "round_brief_id",
+    "target_challenge_id",
+    "transition_request_id",
+    "source_round_id",
+    "supplemental_round_policy",
+)
+
+COORDINATION_LIST_FIELDS = (
+    "active_theme_ids",
+    "round_internal_phases",
+    "agent_responsibility_boundaries",
+    "round_exit_criteria",
+    "primary_focus_refs",
+    "unresolved_responsibility_boundary_refs",
+    "parent_theme_progress_review_refs",
+    "open_questions",
+    "requested_outputs",
+    "invited_roles",
+    "boundary_notes",
+)
+
+COORDINATION_CANDIDATE_ID_FIELDS = (
+    "program_id",
+    "round_brief_id",
+    "context_packet_id",
+    "target_challenge_id",
+    "transition_request_id",
+)
+
+COORDINATION_CANDIDATE_LIST_FIELDS = (
+    "active_theme_ids",
+    "primary_focus_refs",
+    "unresolved_responsibility_boundary_refs",
+    "parent_theme_progress_review_refs",
 )
 
 
@@ -77,6 +127,184 @@ def text_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [maybe_text(item) for item in value if maybe_text(item)]
+
+
+def unique_texts(values: list[Any]) -> list[str]:
+    seen: set[str] = set()
+    results: list[str] = []
+    for value in values:
+        text = maybe_text(value)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        results.append(text)
+    return results
+
+
+def read_json_if_exists(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def coordination_context_from_payload(
+    payload: dict[str, Any],
+    *,
+    origin: str,
+    object_id: str = "",
+) -> dict[str, Any]:
+    context = (
+        payload.get("coordination_context")
+        if isinstance(payload.get("coordination_context"), dict)
+        else payload
+    )
+    if not isinstance(context, dict):
+        context = {}
+    result: dict[str, Any] = {
+        "origin": origin,
+        "object_id": maybe_text(object_id),
+    }
+    for field_name in COORDINATION_TEXT_FIELDS:
+        value = maybe_text(context.get(field_name)) or maybe_text(payload.get(field_name))
+        if value:
+            result[field_name] = value
+    for field_name in COORDINATION_LIST_FIELDS:
+        values = unique_texts(
+            [
+                *text_list(context.get(field_name)),
+                *text_list(payload.get(field_name)),
+            ]
+        )
+        if values:
+            result[field_name] = values
+    if maybe_text(context.get("semantics")):
+        result["semantics"] = maybe_text(context.get("semantics"))
+    return result
+
+
+def round_task_coordination_contexts(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    contexts: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for task in tasks:
+        inputs = task.get("inputs") if isinstance(task.get("inputs"), dict) else {}
+        raw_context = inputs.get("round_coordination_context")
+        if not isinstance(raw_context, dict):
+            continue
+        task_id = maybe_text(task.get("task_id"))
+        context = coordination_context_from_payload(
+            raw_context,
+            origin="round-task-scaffold",
+            object_id=task_id,
+        )
+        key = json.dumps(context, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+        if key in seen:
+            continue
+        seen.add(key)
+        contexts.append(context)
+    return contexts
+
+
+def latest_round_transition_context(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+) -> dict[str, Any]:
+    transition = load_round_transition_record(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    if not isinstance(transition, dict):
+        transition = read_json_if_exists(
+            run_dir / "runtime" / f"round_transition_{round_id}.json"
+        )
+    if not transition:
+        return {
+            "present": False,
+            "source": "round-transition",
+            "semantics": PROGRAM_COORDINATION_CONTEXT_SEMANTICS,
+        }
+    context = coordination_context_from_payload(
+        transition,
+        origin="round-transition",
+        object_id=maybe_text(transition.get("transition_id")),
+    )
+    return {
+        "present": True,
+        "source": "round-transition",
+        "transition_id": maybe_text(transition.get("transition_id")),
+        "context": context,
+        "semantics": PROGRAM_COORDINATION_CONTEXT_SEMANTICS,
+    }
+
+
+def merged_program_coordination_context(
+    *,
+    round_brief_context: dict[str, Any],
+    round_transition_context: dict[str, Any],
+    task_coordination_contexts: list[dict[str, Any]],
+) -> dict[str, Any]:
+    contexts: list[dict[str, Any]] = []
+    if round_brief_context.get("present"):
+        contexts.append(
+            coordination_context_from_payload(
+                round_brief_context,
+                origin="round-brief",
+                object_id=maybe_text(round_brief_context.get("object_id")),
+            )
+        )
+    transition_context = round_transition_context.get("context")
+    if isinstance(transition_context, dict) and transition_context:
+        contexts.append(transition_context)
+    contexts.extend(task_coordination_contexts)
+
+    merged: dict[str, Any] = {
+        "schema_version": "program-coordination-context-v1",
+        "present": bool(contexts),
+        "context_origins": unique_texts([context.get("origin") for context in contexts]),
+        "semantics": PROGRAM_COORDINATION_CONTEXT_SEMANTICS,
+        "runtime_boundary": {
+            "context_only": True,
+            "does_not_filter_source_selection": True,
+            "does_not_rank_routes": True,
+            "does_not_auto_execute": True,
+            "does_not_gate_evidence_acceptance": True,
+        },
+    }
+    for field_name in COORDINATION_TEXT_FIELDS:
+        for context in contexts:
+            value = maybe_text(context.get(field_name))
+            if value:
+                merged[field_name] = value
+                break
+    for field_name in COORDINATION_LIST_FIELDS:
+        merged_values = unique_texts(
+            [
+                value
+                for context in contexts
+                for value in text_list(context.get(field_name))
+            ]
+        )
+        if merged_values:
+            merged[field_name] = merged_values
+    candidate_ids = coordination_candidate_ids(merged)
+    if candidate_ids:
+        merged["candidate_ids"] = candidate_ids
+    return merged
+
+
+def coordination_candidate_ids(context: dict[str, Any]) -> list[str]:
+    values: list[Any] = []
+    for field_name in COORDINATION_CANDIDATE_ID_FIELDS:
+        values.append(context.get(field_name))
+    for field_name in COORDINATION_CANDIDATE_LIST_FIELDS:
+        values.extend(text_list(context.get(field_name)))
+    return unique_texts(values)
 
 
 def latest_round_brief_context(
@@ -212,6 +440,17 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
         run_id=run_id,
         round_id=round_id,
     )
+    round_transition_context = latest_round_transition_context(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    task_coordination_contexts = round_task_coordination_contexts(tasks)
+    program_coordination_context = merged_program_coordination_context(
+        round_brief_context=round_brief_context,
+        round_transition_context=round_transition_context,
+        task_coordination_contexts=task_coordination_contexts,
+    )
     selections = build_source_selections(run_dir=run_dir_path, mission=mission, tasks=tasks, run_id=run_id, round_id=round_id)
     write_source_selections(run_dir_path, round_id, selections)
     plan_payload, warnings = build_fetch_plan(
@@ -225,8 +464,14 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
     plan_payload["task_path"] = str(task_path)
     plan_payload["task_source"] = task_source
     plan_payload["round_brief_context"] = round_brief_context
+    plan_payload["round_transition_context"] = round_transition_context
+    plan_payload["task_coordination_contexts"] = task_coordination_contexts
+    plan_payload["program_coordination_context"] = program_coordination_context
     plan_payload["coordination_context"] = {
+        "program": program_coordination_context,
         "round_brief": round_brief_context,
+        "round_transition": round_transition_context,
+        "round_tasks": task_coordination_contexts,
         "semantics": ROUND_BRIEF_HINT_SEMANTICS,
     }
     plan_payload["observed_inputs"] = {
@@ -234,6 +479,9 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
         "round_tasks_present": task_present,
         "round_brief_present": bool(round_brief_context.get("present")),
         "round_brief_source": maybe_text(round_brief_context.get("source")),
+        "round_transition_context_present": bool(round_transition_context.get("present")),
+        "task_coordination_context_present": bool(task_coordination_contexts),
+        "program_coordination_context_present": bool(program_coordination_context.get("present")),
     }
     write_json_file(output_path, plan_payload)
 
@@ -273,6 +521,11 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
             "task_source": task_source,
             "round_brief_id": maybe_text(round_brief_context.get("object_id")),
             "round_brief_present": bool(round_brief_context.get("present")),
+            "program_id": maybe_text(program_coordination_context.get("program_id")),
+            "round_mode": maybe_text(program_coordination_context.get("round_mode")),
+            "round_category": maybe_text(program_coordination_context.get("round_category")),
+            "active_theme_ids": text_list(program_coordination_context.get("active_theme_ids")),
+            "program_coordination_context_present": bool(program_coordination_context.get("present")),
             "selection_statuses": {
                 role: maybe_text(payload.get("selection_status"))
                 for role, payload in plan_payload.get("roles", {}).items()
@@ -287,6 +540,7 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
             for item in [
                 plan_payload["plan_id"],
                 maybe_text(round_brief_context.get("object_id")),
+                *coordination_candidate_ids(program_coordination_context),
             ]
             if maybe_text(item)
         ],
@@ -297,6 +551,7 @@ def prepare_round_skill(run_dir: str, run_id: str, round_id: str) -> dict[str, A
                 for item in [
                     plan_payload["plan_id"],
                     maybe_text(round_brief_context.get("object_id")),
+                    *coordination_candidate_ids(program_coordination_context),
                 ]
                 if maybe_text(item)
             ],

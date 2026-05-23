@@ -11,7 +11,11 @@ description: Moderator-controlled council-state skill that opens one follow-up i
 - Preserve the source round as historical context.
 - Carry forward active hypotheses and unresolved follow-up work into the new round.
 - Materialize `round_tasks_<round_id>.json` so the next round can immediately continue through `prepare-round` or agent-led investigation.
-- Carry optional coordination hints such as `round_mode`, `primary_focus_refs`, `target_challenge_id`, `context_packet_id`, and `round_brief_id` without turning them into hard constraints.
+- Carry optional coordination hints such as `round_mode`, `program_id`,
+  `active_theme_ids`, `round_category`, `round_internal_phases`,
+  `agent_responsibility_boundaries`, supplemental focus refs,
+  `target_challenge_id`, `context_packet_id`, and `round_brief_id` without
+  turning them into hard constraints.
 
 ## Triggering Conditions
 - The current round is evidence-insufficient and the moderator decides to continue in a new round.
@@ -45,6 +49,15 @@ description: Moderator-controlled council-state skill that opens one follow-up i
   - `target_challenge_id`
   - `context_packet_id`
   - `round_brief_id`
+  - `program_id`
+  - `round_title`
+  - `round_subtitle_question`
+  - `round_category`
+  - `active_theme_id`
+  - `round_internal_phase`
+  - `agent_responsibility_boundary`
+  - `unresolved_responsibility_boundary_ref`
+  - `parent_theme_progress_review_ref`
 
 ## Output Contract
 - `status`
@@ -61,6 +74,9 @@ description: Moderator-controlled council-state skill that opens one follow-up i
   does not decide the next round's factual conclusion or source choices.
 - `primary_focus_refs`, challenge ids, and context packet ids are handoff
   context, not hard agenda locks; agents may revise them with rationale.
+- Program and theme fields carried by this skill are coordination context only.
+  They do not preselect source families, source skills, queries, route ranking,
+  scheduler queues, or evidence acceptance.
 - Use this when live actionable routes remain. If the council does not continue,
   the moderator should record the report boundary and non-continuation rationale.
 - If an investigator submitted an `evidence-route-assessment`, the new round

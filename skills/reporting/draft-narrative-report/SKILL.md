@@ -69,6 +69,11 @@ description: Draft a narrative decision-support report from existing council, re
   - interpretation that links those lanes into one line of reasoning;
   - counter-boundary: what stronger claims the evidence cannot support;
   - decision or research meaning.
+- When `situation-analysis-brief` is present in the reporting handoff, use it
+  as the primary report spine before falling back to scattered council objects:
+  mission answer, event stages, fact process, official action, public semantics,
+  policy semantics, interaction claims, downgraded claims, unresolved needs, and
+  forbidden writing upgrades should shape the reader-facing sections.
 - Reader-facing prose should normally develop that map as an academic article:
   - 摘要：研究问题、证据基础、主要发现、边界；
   - 关键词：case topic, source families, method terms;

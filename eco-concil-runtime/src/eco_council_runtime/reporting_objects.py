@@ -24,6 +24,7 @@ OBJECT_KIND_COUNCIL_DECISION = "council-decision"
 OBJECT_KIND_EXPERT_REPORT = "expert-report"
 OBJECT_KIND_REPORT_SECTION_DRAFT = "report-section-draft"
 OBJECT_KIND_AGENT_SECTION_BRIEF = "agent-section-brief"
+OBJECT_KIND_SITUATION_ANALYSIS_BRIEF = "situation-analysis-brief"
 OBJECT_KIND_FINAL_PUBLICATION = "final-publication"
 
 REPORTING_STAGE_VALUES = {"draft", "canonical"}
@@ -75,6 +76,16 @@ QUERY_CONFIGS: dict[str, dict[str, Any]] = {
         "timestamp_column": "generated_at_utc",
         "order_by": "generated_at_utc DESC, brief_id DESC",
         "agent_role_column": "agent_role",
+        "status_column": "status",
+        "decision_id_column": "",
+        "stage_column": "",
+    },
+    OBJECT_KIND_SITUATION_ANALYSIS_BRIEF: {
+        "table_name": "situation_analysis_briefs",
+        "id_column": "brief_id",
+        "timestamp_column": "generated_at_utc",
+        "order_by": "generated_at_utc DESC, brief_id DESC",
+        "agent_role_column": "",
         "status_column": "status",
         "decision_id_column": "",
         "stage_column": "",
@@ -512,6 +523,191 @@ def store_agent_section_brief_record(
     }
 
 
+def normalized_situation_analysis_brief_payload(
+    brief: dict[str, Any],
+    *,
+    run_id: str,
+    round_id: str,
+) -> dict[str, Any]:
+    normalized = dict(brief)
+    normalized_run_id = maybe_text(normalized.get("run_id")) or run_id
+    normalized_round_id = maybe_text(normalized.get("round_id")) or round_id
+    basis_round_id = maybe_text(normalized.get("basis_round_id")) or normalized_round_id
+    decision_source = maybe_text(normalized.get("decision_source")) or "report-editor"
+    normalized["run_id"] = normalized_run_id
+    normalized["round_id"] = normalized_round_id
+    normalized["basis_round_id"] = basis_round_id
+    normalized["generated_at_utc"] = maybe_text(normalized.get("generated_at_utc")) or utc_now_iso()
+    normalized["decision_source"] = decision_source
+    normalized["status"] = maybe_text(normalized.get("status")) or "materialized"
+    normalized["program_id"] = maybe_text(normalized.get("program_id")) or "program-not-linked"
+    normalized["mission_answerable_question"] = maybe_text(
+        normalized.get("mission_answerable_question")
+    ) or "What bounded situation analysis can be written from carried council basis?"
+    normalized["central_bounded_judgement"] = maybe_text(
+        normalized.get("central_bounded_judgement")
+    ) or "The carried basis supports only a bounded situation analysis with explicit limitations."
+    for field_name in (
+        "event_stage_map",
+        "fact_process_chain",
+        "official_action_chain",
+        "public_semantic_chain",
+        "policy_semantic_chain",
+        "interaction_claims",
+        "policy_evaluation_basis",
+        "downgraded_claims",
+        "unresolved_claim_needs",
+        "section_brief_refs",
+        "basis_object_ids",
+        "evidence_refs",
+        "challenger_boundary_refs",
+        "recommended_report_spine",
+        "forbidden_writing_upgrades",
+    ):
+        normalized[field_name] = unique_items(list_items(normalized.get(field_name)))
+    normalized["recommended_report_spine"] = normalized["recommended_report_spine"] or [
+        "Answer the mission with a bounded judgement before moving into evidence lanes.",
+        "Explain fact process, official action, public semantics, interaction limits, and policy-evaluation boundaries as one analysis line.",
+    ]
+    normalized["forbidden_writing_upgrades"] = normalized["forbidden_writing_upgrades"] or [
+        "Do not add facts that are absent from section briefs, frozen basis, council objects, accepted review, or challenger boundaries.",
+        "Do not turn sample-local public semantics into representative public opinion.",
+        "Do not treat GDELT media/document tone as public sentiment.",
+        "Do not turn public source narratives into physical source attribution.",
+        "Do not state policy effectiveness, causality, responsibility, or adequacy beyond carried basis and challenger-visible limits.",
+    ]
+    provenance_value = normalized.get("provenance")
+    provenance = dict(provenance_value) if isinstance(provenance_value, dict) else {}
+    if not provenance:
+        provenance = {
+            "decision_source": decision_source,
+            "basis_round_id": basis_round_id,
+        }
+    normalized["provenance"] = provenance
+    normalized["lineage"] = unique_items(
+        [
+            *list_items(normalized.get("lineage")),
+            normalized["program_id"],
+            normalized["basis_round_id"],
+            *normalized["section_brief_refs"],
+            *normalized["basis_object_ids"],
+            *normalized["challenger_boundary_refs"],
+        ]
+    )
+    normalized["brief_id"] = (
+        maybe_text(normalized.get("brief_id"))
+        or "situation-analysis-brief-"
+        + stable_hash(
+            "situation-analysis-brief",
+            normalized_run_id,
+            normalized_round_id,
+            basis_round_id,
+            normalized["program_id"],
+            normalized["central_bounded_judgement"],
+        )[:12]
+    )
+    normalized["schema_version"] = canonical_contract(
+        OBJECT_KIND_SITUATION_ANALYSIS_BRIEF
+    ).schema_version
+    return validate_canonical_payload(OBJECT_KIND_SITUATION_ANALYSIS_BRIEF, normalized)
+
+
+def situation_analysis_brief_row_from_payload(
+    brief: dict[str, Any],
+    *,
+    artifact_path: str,
+    record_locator: str,
+) -> dict[str, Any]:
+    return {
+        "brief_id": maybe_text(brief.get("brief_id")),
+        "run_id": maybe_text(brief.get("run_id")),
+        "round_id": maybe_text(brief.get("round_id")),
+        "generated_at_utc": maybe_text(brief.get("generated_at_utc")),
+        "status": maybe_text(brief.get("status")),
+        "program_id": maybe_text(brief.get("program_id")),
+        "basis_round_id": maybe_text(brief.get("basis_round_id")),
+        "decision_source": maybe_text(brief.get("decision_source")),
+        "mission_answerable_question": maybe_text(brief.get("mission_answerable_question")),
+        "central_bounded_judgement": maybe_text(brief.get("central_bounded_judgement")),
+        "evidence_refs_json": json.dumps(brief.get("evidence_refs", []), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "section_brief_refs_json": json.dumps(brief.get("section_brief_refs", []), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "basis_object_ids_json": json.dumps(brief.get("basis_object_ids", []), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "unresolved_claim_needs_json": json.dumps(brief.get("unresolved_claim_needs", []), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "provenance_json": json.dumps(brief.get("provenance", {}), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "lineage_json": json.dumps(brief.get("lineage", []), ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+        "artifact_path": maybe_text(artifact_path),
+        "record_locator": maybe_text(record_locator),
+        "raw_json": json.dumps(brief, ensure_ascii=True, separators=(",", ":"), sort_keys=True),
+    }
+
+
+def write_situation_analysis_brief_row(connection: sqlite3.Connection, row: dict[str, Any]) -> None:
+    connection.execute(
+        """
+        INSERT OR REPLACE INTO situation_analysis_briefs (
+            brief_id, run_id, round_id, generated_at_utc, status,
+            program_id, basis_round_id, decision_source,
+            mission_answerable_question, central_bounded_judgement,
+            evidence_refs_json, section_brief_refs_json, basis_object_ids_json,
+            unresolved_claim_needs_json, provenance_json, lineage_json,
+            artifact_path, record_locator, raw_json
+        ) VALUES (
+            :brief_id, :run_id, :round_id, :generated_at_utc, :status,
+            :program_id, :basis_round_id, :decision_source,
+            :mission_answerable_question, :central_bounded_judgement,
+            :evidence_refs_json, :section_brief_refs_json, :basis_object_ids_json,
+            :unresolved_claim_needs_json, :provenance_json, :lineage_json,
+            :artifact_path, :record_locator, :raw_json
+        )
+        """,
+        row,
+    )
+
+
+def store_situation_analysis_brief_record(
+    run_dir: str | Path,
+    *,
+    brief_payload: dict[str, Any],
+    artifact_path: str = "",
+    db_path: str = "",
+) -> dict[str, Any]:
+    run_dir_path = Path(run_dir).expanduser().resolve()
+    payload = dict(brief_payload) if isinstance(brief_payload, dict) else {}
+    normalized_payload = normalized_situation_analysis_brief_payload(
+        payload,
+        run_id=maybe_text(payload.get("run_id")),
+        round_id=maybe_text(payload.get("round_id")),
+    )
+    run_id = maybe_text(normalized_payload.get("run_id"))
+    round_id = maybe_text(normalized_payload.get("round_id"))
+    basis_round_id = maybe_text(normalized_payload.get("basis_round_id"))
+    connection, _db_file = connect_db(run_dir_path, db_path)
+    try:
+        with connection:
+            connection.execute(
+                """
+                DELETE FROM situation_analysis_briefs
+                WHERE run_id = ? AND round_id = ? AND basis_round_id = ?
+                """,
+                (run_id, round_id, basis_round_id),
+            )
+            write_situation_analysis_brief_row(
+                connection,
+                situation_analysis_brief_row_from_payload(
+                    normalized_payload,
+                    artifact_path=artifact_path,
+                    record_locator="$.brief",
+                ),
+            )
+    finally:
+        connection.close()
+    return {
+        "schema_version": "situation-analysis-brief-append-v1",
+        "db_path": str(_db_file),
+        "brief": normalized_payload,
+    }
+
+
 def _unsupported_filter_error(
     *,
     object_kind: str,
@@ -660,9 +856,11 @@ __all__ = [
     "OBJECT_KIND_EXPERT_REPORT",
     "OBJECT_KIND_FINAL_PUBLICATION",
     "OBJECT_KIND_AGENT_SECTION_BRIEF",
+    "OBJECT_KIND_SITUATION_ANALYSIS_BRIEF",
     "OBJECT_KIND_REPORT_SECTION_DRAFT",
     "OBJECT_KIND_REPORTING_HANDOFF",
     "store_agent_section_brief_record",
+    "store_situation_analysis_brief_record",
     "store_report_section_draft_record",
     "query_reporting_objects",
     "reporting_queryable_object_kinds",

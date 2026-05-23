@@ -60,6 +60,8 @@ COORDINATION_READ_OBJECT_KINDS = (
     "investigation-scope",
     "round-brief",
     "round-synthesis",
+    "theme-evidence-boundary-plan",
+    "theme-progress-review",
     "evidence-request",
     "source-acquisition-proposal",
     "evidence-route-assessment",
@@ -269,6 +271,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
         "write_skills": [
             "submit-agent-position",
             "materialize-reporting-handoff",
+            "materialize-situation-analysis-brief",
             "draft-council-decision",
             "draft-expert-report",
             "draft-narrative-report",
@@ -1512,6 +1515,23 @@ def default_role_entry_points(
                         ],
                     )
                 )
+            elif skill_name == "materialize-situation-analysis-brief":
+                role_write_commands.append(
+                    run_skill_command(
+                        run_dir=run_dir,
+                        run_id=run_id,
+                        round_id=round_id,
+                        skill_name=skill_name,
+                        actor_role=role,
+                        contract_mode=contract_mode,
+                        skill_args=[
+                            "--basis-round-id",
+                            "<source_or_frozen_basis_round_id>",
+                            "--program-id",
+                            "<program_id>",
+                        ],
+                    )
+                )
             elif skill_name in {"validate-narrative-report", "publish-narrative-report"}:
                 role_write_commands.append(
                     run_skill_command(
@@ -1765,7 +1785,7 @@ def default_role_entry_points(
                                 "round_mode": "report-writing",
                                 "basis_round_id": round_id,
                                 "reporting_basis_refs": ["<final-publication|council-decision|report-basis:object_id>"],
-                                "scope": "report-editor-only narrative report production from existing council basis",
+                                "scope": "report-editor-only situation-analysis brief and narrative report production from existing council basis",
                             },
                             ensure_ascii=True,
                             sort_keys=True,
@@ -1904,7 +1924,7 @@ def default_agent_entry_operator_notes(
     ]
     # This note is intentionally mode-agnostic here; the role surface carries the
     # exact report-writing mode once a report-only round is opened.
-    notes.append("A report-writing round is a reporting-only continuation: it should register report-editor only and consume existing council/reporting basis, not reopen investigation.")
+    notes.append("A report-writing round is a reporting-only continuation: it should register report-editor only and consume existing council/reporting basis through the situation-analysis brief path before narrative drafting, not reopen investigation.")
     if maybe_text(mission.get("orchestration_mode")) == "openclaw-agent":
         notes.append("Mission scaffold already marks this round as `openclaw-agent`, so the operator-visible entry chain is explicitly enabled.")
     if int(analysis.get("matching_result_set_count") or 0) > 0:
@@ -2372,7 +2392,7 @@ def default_agent_entry_operator_commands(
                     "round_mode": "report-writing",
                     "basis_round_id": round_id,
                     "reporting_basis_refs": ["<final-publication|council-decision|report-basis:object_id>"],
-                    "scope": "report-editor-only narrative report production from existing council basis",
+                    "scope": "report-editor-only situation-analysis brief and narrative report production from existing council basis",
                 },
                 ensure_ascii=True,
                 sort_keys=True,

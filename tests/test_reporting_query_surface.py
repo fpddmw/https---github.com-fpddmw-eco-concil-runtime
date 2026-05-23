@@ -254,6 +254,7 @@ class ReportingQuerySurfaceTests(unittest.TestCase):
                     "council-decision",
                     "expert-report",
                     "agent-section-brief",
+                    "situation-analysis-brief",
                     "final-publication",
                 },
                 {contract["object_kind"] for contract in contracts_payload["contracts"]},

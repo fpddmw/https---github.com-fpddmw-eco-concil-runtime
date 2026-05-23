@@ -671,7 +671,7 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
             run_dir = root / "run"
             artifacts = build_raw_artifacts(root)
             mission_path = build_mission_file(root, artifacts)
-            round2_id = "round-002"
+            round2_id = "round-002-supplemental-public-semantics"
 
             run_script(
                 script_path("scaffold-mission-run"),
@@ -693,8 +693,27 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 source_round_id=ROUND_ID,
                 rationale="Moderator opens a supplemental investigation round.",
                 request_payload={
+                    "program_id": "council-program-ingress-001",
                     "context_packet_id": "context-packet-001",
                     "primary_focus_refs": ["request-focus-001"],
+                    "active_theme_ids": ["theme-public-semantics"],
+                    "round_category": "supplemental-issue-deliberation",
+                    "round_internal_phases": [
+                        "supplemental-acquisition-turns",
+                        "supplemental-analysis-turns",
+                        "progress-review",
+                        "moderator-synthesis",
+                    ],
+                    "agent_responsibility_boundaries": [
+                        "social-investigator: recover or downgrade public semantic denominator boundary.",
+                        "challenger: review whether supplemental scope is justified before report use.",
+                    ],
+                    "unresolved_responsibility_boundary_refs": [
+                        "theme-public-semantics:denominator-boundary"
+                    ],
+                    "parent_theme_progress_review_refs": [
+                        "theme-progress-review-ingress-001"
+                    ],
                 },
             )
 
@@ -729,7 +748,10 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
             task_context = round2_tasks[0]["inputs"]["round_coordination_context"]
 
             self.assertEqual("provided", transition_artifact["coordination_context"]["context_status"])
+            self.assertEqual("council-program-ingress-001", transition_artifact["program_id"])
             self.assertEqual("supplemental-investigation", transition_artifact["round_mode"])
+            self.assertEqual("supplemental-issue-deliberation", transition_artifact["round_category"])
+            self.assertEqual(["theme-public-semantics"], transition_artifact["active_theme_ids"])
             self.assertEqual("context-packet-001", transition_artifact["context_packet_id"])
             self.assertEqual("challenge-ticket-001", transition_artifact["target_challenge_id"])
             self.assertEqual("round-brief-001", transition_artifact["round_brief_id"])
@@ -738,9 +760,119 @@ class OrchestrationIngressWorkflowTests(unittest.TestCase):
                 transition_artifact["primary_focus_refs"],
             )
             self.assertEqual("context-packet-001", task_context["context_packet_id"])
+            self.assertEqual("council-program-ingress-001", task_context["program_id"])
+            self.assertEqual(
+                ["theme-public-semantics"],
+                task_context["active_theme_ids"],
+            )
+            self.assertIn(
+                "theme-progress-review-ingress-001",
+                task_context["parent_theme_progress_review_refs"],
+            )
             self.assertIn("does not restrict", task_context["semantics"])
             self.assertEqual("round-brief-001", open_payload["summary"]["round_brief_id"])
             self.assertIn("challenge-ticket-001", open_payload["board_handoff"]["candidate_ids"])
+
+            prepare_payload = run_script(
+                script_path("prepare-round"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                round2_id,
+            )
+            plan_artifact = load_json(runtime_path(run_dir, f"fetch_plan_{round2_id}.json"))
+            program_context = plan_artifact["program_coordination_context"]
+
+            self.assertTrue(plan_artifact["observed_inputs"]["round_transition_context_present"])
+            self.assertTrue(plan_artifact["observed_inputs"]["task_coordination_context_present"])
+            self.assertTrue(plan_artifact["observed_inputs"]["program_coordination_context_present"])
+            self.assertEqual("council-program-ingress-001", program_context["program_id"])
+            self.assertEqual("supplemental-issue-deliberation", program_context["round_category"])
+            self.assertEqual(["theme-public-semantics"], program_context["active_theme_ids"])
+            self.assertIn("round-transition", program_context["context_origins"])
+            self.assertIn("round-task-scaffold", program_context["context_origins"])
+            self.assertTrue(program_context["runtime_boundary"]["context_only"])
+            self.assertTrue(
+                program_context["runtime_boundary"]["does_not_filter_source_selection"]
+            )
+            forbidden_context_keys = {
+                "source_family",
+                "source_skill",
+                "query",
+                "query_parameters",
+                "route_ranking",
+                "scheduler_queue",
+                "auto_execute",
+            }
+            self.assertFalse(forbidden_context_keys.intersection(program_context))
+            self.assertEqual(
+                ["fetch-youtube-video-search", "fetch-bluesky-cascade"],
+                plan_artifact["roles"]["social-investigator"]["selected_sources"],
+            )
+            self.assertEqual(
+                "council-program-ingress-001",
+                prepare_payload["summary"]["program_id"],
+            )
+            self.assertIn(
+                "council-program-ingress-001",
+                prepare_payload["board_handoff"]["candidate_ids"],
+            )
+
+    def test_open_investigation_round_rejects_mechanical_transition_boundaries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            run_dir = root / "run"
+            artifacts = build_raw_artifacts(root)
+            mission_path = build_mission_file(root, artifacts)
+            target_round_id = "round-002-supplemental-invalid-boundary"
+
+            run_script(
+                script_path("scaffold-mission-run"),
+                "--run-dir",
+                str(run_dir),
+                "--run-id",
+                RUN_ID,
+                "--round-id",
+                ROUND_ID,
+                "--mission-path",
+                str(mission_path),
+            )
+            transition_request_id = request_and_approve_transition(
+                run_dir,
+                run_id=RUN_ID,
+                round_id=ROUND_ID,
+                transition_kind="open-investigation-round",
+                target_round_id=target_round_id,
+                source_round_id=ROUND_ID,
+                rationale="Moderator asks for an invalid mechanical transition boundary.",
+                request_payload={
+                    "program_id": "council-program-ingress-001",
+                    "round_category": "supplemental-issue-deliberation",
+                    "agent_responsibility_boundaries": [
+                        "social-investigator must query fixed source skill sequence."
+                    ],
+                },
+            )
+
+            with self.assertRaisesRegex(
+                AssertionError,
+                "source/query/skill/task sequence",
+            ):
+                run_script(
+                    script_path("open-investigation-round"),
+                    "--run-dir",
+                    str(run_dir),
+                    "--run-id",
+                    RUN_ID,
+                    "--round-id",
+                    target_round_id,
+                    "--source-round-id",
+                    ROUND_ID,
+                    "--transition-request-id",
+                    transition_request_id,
+                )
 
     def test_ingress_import_execution_reconnects_to_reporting_mainline(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

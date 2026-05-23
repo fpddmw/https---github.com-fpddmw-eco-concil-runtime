@@ -16,8 +16,10 @@ from eco_council_runtime.kernel.planes.deliberation_plane import (
 
 OBJECT_KIND_PROPOSAL = "proposal"
 OBJECT_KIND_REPORT_BLUEPRINT = "report-blueprint"
+OBJECT_KIND_REPORT_OUTCOME_CONTRACT = "report-outcome-contract"
 OBJECT_KIND_INVESTIGATION_THEME = "investigation-theme"
 OBJECT_KIND_COUNCIL_INVESTIGATION_PROGRAM = "council-investigation-program"
+OBJECT_KIND_DOSSIER_PROGRAM = "dossier-program"
 OBJECT_KIND_THEME_EVIDENCE_BOUNDARY_PLAN = "theme-evidence-boundary-plan"
 OBJECT_KIND_THEME_PROGRESS_REVIEW = "theme-progress-review"
 OBJECT_KIND_FINDING = "finding"
@@ -47,8 +49,10 @@ OBJECT_KIND_DECISION_TRACE = "decision-trace"
 
 DYNAMIC_INVESTIGATION_OBJECT_KINDS = (
     OBJECT_KIND_REPORT_BLUEPRINT,
+    OBJECT_KIND_REPORT_OUTCOME_CONTRACT,
     OBJECT_KIND_INVESTIGATION_THEME,
     OBJECT_KIND_COUNCIL_INVESTIGATION_PROGRAM,
+    OBJECT_KIND_DOSSIER_PROGRAM,
     OBJECT_KIND_THEME_EVIDENCE_BOUNDARY_PLAN,
     OBJECT_KIND_THEME_PROGRESS_REVIEW,
     OBJECT_KIND_INVESTIGATION_PLAN,
@@ -66,8 +70,10 @@ DYNAMIC_INVESTIGATION_OBJECT_KINDS = (
 
 DYNAMIC_INVESTIGATION_ID_FIELDS = {
     OBJECT_KIND_REPORT_BLUEPRINT: "blueprint_id",
+    OBJECT_KIND_REPORT_OUTCOME_CONTRACT: "contract_id",
     OBJECT_KIND_INVESTIGATION_THEME: "theme_id",
     OBJECT_KIND_COUNCIL_INVESTIGATION_PROGRAM: "program_id",
+    OBJECT_KIND_DOSSIER_PROGRAM: "program_id",
     OBJECT_KIND_THEME_EVIDENCE_BOUNDARY_PLAN: "plan_id",
     OBJECT_KIND_THEME_PROGRESS_REVIEW: "review_id",
     OBJECT_KIND_INVESTIGATION_PLAN: "plan_id",
@@ -85,8 +91,10 @@ DYNAMIC_INVESTIGATION_ID_FIELDS = {
 
 DYNAMIC_INVESTIGATION_STATUS_DEFAULTS = {
     OBJECT_KIND_REPORT_BLUEPRINT: "framed",
+    OBJECT_KIND_REPORT_OUTCOME_CONTRACT: "proposed",
     OBJECT_KIND_INVESTIGATION_THEME: "open",
     OBJECT_KIND_COUNCIL_INVESTIGATION_PROGRAM: "proposed",
+    OBJECT_KIND_DOSSIER_PROGRAM: "proposed",
     OBJECT_KIND_THEME_EVIDENCE_BOUNDARY_PLAN: "submitted",
     OBJECT_KIND_THEME_PROGRESS_REVIEW: "advisory",
     OBJECT_KIND_INVESTIGATION_PLAN: "draft",
@@ -862,6 +870,123 @@ def validate_council_investigation_program_payload(payload: dict[str, Any]) -> N
     )
 
 
+def validate_report_outcome_contract_payload(payload: dict[str, Any]) -> None:
+    reject_source_route_scheduler_fields(OBJECT_KIND_REPORT_OUTCOME_CONTRACT, payload)
+    if maybe_text(payload.get("author_role")) not in {"moderator", "report-editor"}:
+        raise ValueError(
+            "report-outcome-contract must be authored by moderator or report-editor; "
+            "it defines report requirements, not acquisition routes."
+        )
+    required_lists = (
+        "required_theme_reports",
+        "quality_gates",
+        "required_cross_theme_reviews",
+        "final_report_obligations",
+        "forbidden_final_report_inputs",
+        "audit_index_requirements",
+    )
+    missing_lists = [
+        field_name
+        for field_name in required_lists
+        if not isinstance(payload.get(field_name), list) or not payload.get(field_name)
+    ]
+    if missing_lists:
+        raise ValueError(
+            "report-outcome-contract requires non-empty list fields: "
+            + ", ".join(missing_lists)
+        )
+    for index, report_item in enumerate(payload.get("required_theme_reports", [])):
+        if not isinstance(report_item, dict):
+            raise ValueError(
+                "report-outcome-contract required_theme_reports items must be objects."
+            )
+        missing = [
+            field_name
+            for field_name in ("theme_report_id", "theme_id", "required_dossier")
+            if not maybe_text(report_item.get(field_name))
+        ]
+        if missing:
+            raise ValueError(
+                "report-outcome-contract required_theme_reports "
+                f"item {index} is missing: " + ", ".join(missing)
+            )
+
+
+def validate_dossier_program_payload(payload: dict[str, Any]) -> None:
+    reject_source_route_scheduler_fields(OBJECT_KIND_DOSSIER_PROGRAM, payload)
+    if maybe_text(payload.get("author_role")) not in {"moderator", "runtime-operator"}:
+        raise ValueError(
+            "dossier-program must be synthesized by moderator or attributed to "
+            "runtime-operator import; it is not an investigator route plan."
+        )
+    required_lists = (
+        "program_questions",
+        "required_theme_reports",
+        "theme_cycles",
+        "cross_theme_review_cycles",
+        "agent_responsibility_boundaries",
+        "round_sequence",
+        "round_exit_criteria",
+        "downgrade_conditions",
+        "supplemental_round_triggers",
+        "dossier_object_requirements",
+        "final_composition_requirements",
+        "forbidden_scheduler_fields",
+    )
+    missing_lists = [
+        field_name
+        for field_name in required_lists
+        if not isinstance(payload.get(field_name), list) or not payload.get(field_name)
+    ]
+    if missing_lists:
+        raise ValueError(
+            "dossier-program requires non-empty list fields: "
+            + ", ".join(missing_lists)
+        )
+    validate_agent_responsibility_boundaries(
+        OBJECT_KIND_DOSSIER_PROGRAM,
+        payload.get("agent_responsibility_boundaries"),
+    )
+    required_phase_names = {
+        "acquisition",
+        "structuring",
+        "analysis",
+        "theme-report",
+        "review",
+        "adoption",
+    }
+    for index, cycle in enumerate(payload.get("theme_cycles", [])):
+        if not isinstance(cycle, dict):
+            raise ValueError("dossier-program theme_cycles items must be objects.")
+        phases = {
+            maybe_text(phase).casefold()
+            for phase in list(cycle.get("phase_sequence", []))
+        }
+        missing_phases = sorted(required_phase_names - phases)
+        if missing_phases:
+            raise ValueError(
+                f"dossier-program theme cycle {index} is missing phases: "
+                + ", ".join(missing_phases)
+            )
+    for index, round_item in enumerate(payload.get("round_sequence", [])):
+        if not isinstance(round_item, dict):
+            raise ValueError("dossier-program round_sequence items must be objects.")
+        if not maybe_text(round_item.get("round_subtitle_question")).endswith(("?", "？")):
+            raise ValueError(
+                "dossier-program round_sequence "
+                f"item {index} requires a question-form round_subtitle_question."
+            )
+        validate_round_internal_phase_semantics(
+            OBJECT_KIND_DOSSIER_PROGRAM,
+            round_item.get("round_internal_phases"),
+        )
+        validate_agent_responsibility_boundaries(
+            OBJECT_KIND_DOSSIER_PROGRAM,
+            round_item.get("agent_responsibility_boundaries"),
+        )
+    validate_supplemental_round_restraint(OBJECT_KIND_DOSSIER_PROGRAM, payload)
+
+
 def validate_round_brief_payload(payload: dict[str, Any]) -> None:
     reject_source_route_scheduler_fields(OBJECT_KIND_ROUND_BRIEF, payload)
     if maybe_text(payload.get("round_subtitle_question")) and not maybe_text(
@@ -1034,6 +1159,10 @@ def normalized_dynamic_investigation_object_payload(
         normalized["time_window"] = default_theme_boundary_time_window(normalized)
     if normalized_kind == OBJECT_KIND_COUNCIL_INVESTIGATION_PROGRAM:
         validate_council_investigation_program_payload(normalized)
+    if normalized_kind == OBJECT_KIND_REPORT_OUTCOME_CONTRACT:
+        validate_report_outcome_contract_payload(normalized)
+    if normalized_kind == OBJECT_KIND_DOSSIER_PROGRAM:
+        validate_dossier_program_payload(normalized)
     if normalized_kind == OBJECT_KIND_ROUND_BRIEF:
         validate_round_brief_payload(normalized)
     if normalized_kind == OBJECT_KIND_THEME_EVIDENCE_BOUNDARY_PLAN:
@@ -1514,6 +1643,13 @@ def normalized_readiness_opinion_payload(
 
 __all__ = (
     "OBJECT_KIND_PROPOSAL",
+    "OBJECT_KIND_REPORT_BLUEPRINT",
+    "OBJECT_KIND_REPORT_OUTCOME_CONTRACT",
+    "OBJECT_KIND_INVESTIGATION_THEME",
+    "OBJECT_KIND_COUNCIL_INVESTIGATION_PROGRAM",
+    "OBJECT_KIND_DOSSIER_PROGRAM",
+    "OBJECT_KIND_THEME_EVIDENCE_BOUNDARY_PLAN",
+    "OBJECT_KIND_THEME_PROGRESS_REVIEW",
     "OBJECT_KIND_FINDING",
     "OBJECT_KIND_DISCUSSION_MESSAGE",
     "OBJECT_KIND_EVIDENCE_BUNDLE",
