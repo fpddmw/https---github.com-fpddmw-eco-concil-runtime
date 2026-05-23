@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -68,6 +69,20 @@ TRANSITION_KIND_SPECS: dict[str, dict[str, str]] = {
         "requested_command_name": "close-round",
     },
 }
+
+PRIMARY_PROGRAM_ROUND_ID_RE = re.compile(r"^round-\d{3}(?:-|$)")
+SUPPLEMENTAL_ROUND_ID_RE = re.compile(r"^round-\d{3}(?:[a-z]|-supplemental)(?:-|$)")
+SUPPLEMENTAL_ROUND_MARKERS = (
+    "supplemental",
+    "supplement",
+    "strengthening",
+    "strengthen",
+    "recovery",
+    "repair",
+    "rerun",
+    "clean-rerun",
+    "补强",
+)
 
 
 
@@ -149,6 +164,49 @@ def transition_kind_spec(transition_kind: Any) -> dict[str, str]:
             f"Supported kinds: {supported}."
         )
     return spec
+
+
+def is_supplemental_round_request(request_payload: Any) -> bool:
+    if not isinstance(request_payload, dict):
+        return False
+    checked_fields = (
+        "round_mode",
+        "round_category",
+        "round_title",
+        "round_subtitle_question",
+        "continuation_basis",
+        "supplemental_round_policy",
+    )
+    searchable = " ".join(maybe_text(request_payload.get(field)).lower() for field in checked_fields)
+    return any(marker in searchable for marker in SUPPLEMENTAL_ROUND_MARKERS)
+
+
+def validate_supplemental_round_target(
+    *,
+    transition_kind: Any,
+    target_round_id: Any,
+    request_payload: Any,
+) -> None:
+    normalized_kind = normalize_transition_kind(transition_kind)
+    target = maybe_text(target_round_id)
+    if normalized_kind != TRANSITION_KIND_OPEN_INVESTIGATION_ROUND:
+        return
+    if not is_supplemental_round_request(request_payload):
+        return
+    if SUPPLEMENTAL_ROUND_ID_RE.match(target):
+        return
+    if PRIMARY_PROGRAM_ROUND_ID_RE.match(target):
+        raise ValueError(
+            "Supplemental or strengthening investigation rounds must not occupy a primary "
+            "program round id. Use a non-program-slot target_round_id such as "
+            "`round-002a-<purpose>` or `round-002-supplemental-<purpose>`; "
+            f"got `{target}`."
+        )
+    raise ValueError(
+        "Supplemental or strengthening investigation rounds require a supplemental "
+        "target_round_id such as `round-002a-<purpose>` or "
+        f"`round-002-supplemental-<purpose>`; got `{target or '<empty>'}`."
+    )
 
 
 def transition_request_id(
@@ -239,6 +297,8 @@ __all__ = (
     "connect_db",
     "normalize_transition_kind",
     "transition_kind_spec",
+    "is_supplemental_round_request",
+    "validate_supplemental_round_target",
     "transition_request_id",
     "transition_approval_id",
     "transition_rejection_id",

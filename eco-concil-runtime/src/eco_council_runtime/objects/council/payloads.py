@@ -654,6 +654,15 @@ def normalize_query_parameters(value: Any) -> dict[str, Any]:
     return dict(value)
 
 
+def normalized_requested_side_effect_approvals(value: Any) -> list[str]:
+    false_like_values = {"0", "false", "no", "none", "null", "not-required", "not_required"}
+    return [
+        item
+        for item in normalized_text_list(value)
+        if item.casefold() not in false_like_values
+    ]
+
+
 def validate_source_acquisition_proposal_payload(payload: dict[str, Any]) -> None:
     source_skill = maybe_text(payload.get("source_skill"))
     if not source_skill:
@@ -688,7 +697,7 @@ def validate_source_acquisition_proposal_payload(payload: dict[str, Any]) -> Non
     payload["declared_side_effects"] = normalized_text_list(
         payload.get("declared_side_effects")
     )
-    payload["requested_side_effect_approvals"] = normalized_text_list(
+    payload["requested_side_effect_approvals"] = normalized_requested_side_effect_approvals(
         payload.get("requested_side_effect_approvals")
     )
     undeclared = [
@@ -772,6 +781,26 @@ def validate_theme_evidence_boundary_plan_payload(payload: dict[str, Any]) -> No
             "theme-evidence-boundary-plan cannot treat policy_evaluation_basis as a "
             "source family, query route, denominator, or acquisition lane."
         )
+
+
+def default_theme_boundary_time_window(payload: dict[str, Any]) -> dict[str, Any]:
+    existing = payload.get("time_window")
+    if isinstance(existing, dict):
+        return dict(existing)
+    temporal_scope = maybe_text(payload.get("temporal_scope"))
+    if temporal_scope:
+        return {
+            "label": temporal_scope,
+            "source_field": "temporal_scope",
+            "start_utc": "",
+            "end_utc": "",
+        }
+    return {
+        "label": "not specified by author",
+        "source_field": "runtime-default",
+        "start_utc": "",
+        "end_utc": "",
+    }
 
 
 def validate_council_investigation_program_payload(payload: dict[str, Any]) -> None:
@@ -1001,6 +1030,8 @@ def normalized_dynamic_investigation_object_payload(
     normalized[id_field] = maybe_text(normalized.get(id_field)) or object_id
     if normalized_kind == OBJECT_KIND_SOURCE_ACQUISITION_PROPOSAL:
         validate_source_acquisition_proposal_payload(normalized)
+    if normalized_kind == OBJECT_KIND_THEME_EVIDENCE_BOUNDARY_PLAN:
+        normalized["time_window"] = default_theme_boundary_time_window(normalized)
     if normalized_kind == OBJECT_KIND_COUNCIL_INVESTIGATION_PROGRAM:
         validate_council_investigation_program_payload(normalized)
     if normalized_kind == OBJECT_KIND_ROUND_BRIEF:

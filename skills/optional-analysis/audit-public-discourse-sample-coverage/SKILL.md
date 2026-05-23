@@ -27,6 +27,7 @@ description: Optional-analysis helper for auditing public discourse sample cover
 
 ## Optional Input
 - `round_scope`
+- `source_round_id` (use when an analysis round must audit a specific prior acquisition round)
 - `corpus_path`
 - `output_path`
 

@@ -63,6 +63,12 @@ python3 scripts/fetch_federal_register_documents.py fetch \
 
 ## Agent Reasoning Guide
 - This skill fetches official published-document metadata only. It does not classify legal significance, policy stance, public sentiment, source sufficiency, or report conclusions.
+- Use this skill when the evidence question is about federal publication,
+  federal rules/notices, agency notices, or executive documents. Do not use it
+  as the default route for local or state episode response records such as NYC
+  advisories, school operational decisions, transit alerts, or health guidance;
+  those need an official-domain/page route or a clearly bounded reconnaissance
+  route.
 - Zero rows may reflect term choice, agency slug, publication date, document type, page caps, or Federal Register indexing limits. It is not proof that official records are absent.
 - If the route remains live, revise the term/window/agency or use another official project-record source before recording a source-limit rationale.
 - Normalize with `$normalize-official-governance-records` before using the records through DB-backed formal-signal queries.

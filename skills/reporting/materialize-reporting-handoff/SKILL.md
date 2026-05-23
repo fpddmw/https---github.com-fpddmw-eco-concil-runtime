@@ -18,9 +18,12 @@ description: Materialize DB-backed reporting packets from frozen evidence basis 
 - Need a clear packet boundary between evidence citation, decision posture, and final report structure.
 
 ## Read/Write Contract
-- Reads report-basis-freeze, readiness, board, and supervisor state through DB-first wrappers.
-- Reads `run_dir/report_basis/frozen_report_basis_<round_id>.json`, `run_dir/reporting/round_readiness_<round_id>.json`, `run_dir/board/board_brief_<round_id>.md`, and `run_dir/runtime/supervisor_state_<round_id>.json` only as compatible exports when needed.
-- Writes canonical reporting handoff rows and `run_dir/reporting/reporting_handoff_<round_id>.json` as a rebuildable export.
+- Reads `run_dir/report_basis/frozen_report_basis_<round_id>.json`.
+- Reads `run_dir/reporting/round_readiness_<round_id>.json`.
+- Reads `run_dir/board/board_brief_<round_id>.md`.
+- Reads `run_dir/runtime/supervisor_state_<round_id>.json`.
+- Writes `run_dir/reporting/reporting_handoff_<round_id>.json`.
+- Writes canonical reporting handoff rows through the reporting plane.
 - Helper and fallback cues remain audit material unless a DB finding, evidence bundle, proposal, readiness opinion, report section draft, or report basis explicitly cites them.
 
 ## Required Input

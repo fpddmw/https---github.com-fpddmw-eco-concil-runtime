@@ -25,6 +25,7 @@ def main() -> int:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--round-id", required=True)
     parser.add_argument("--round-scope", choices=["current", "run"], default="current")
+    parser.add_argument("--source-round-id", default="")
     parser.add_argument("--corpus-path", default="")
     parser.add_argument("--aggregation-path", default="")
     parser.add_argument("--output-path", default="")
@@ -36,6 +37,7 @@ def main() -> int:
         run_id=args.run_id,
         round_id=args.round_id,
         round_scope=args.round_scope,
+        source_round_id=args.source_round_id,
         corpus_path=args.corpus_path,
         aggregation_path=args.aggregation_path,
         output_path=args.output_path,

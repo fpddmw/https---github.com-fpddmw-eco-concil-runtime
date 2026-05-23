@@ -29,6 +29,7 @@ description: Optional-analysis helper for materializing a DB-backed public/forma
 
 ## Optional Input
 - `round_scope`
+- `source_round_id` (use when an analysis round must read a specific prior acquisition round)
 - `source_family`
 - `discourse_lane`
 - `source_skill`

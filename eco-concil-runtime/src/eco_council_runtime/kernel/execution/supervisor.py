@@ -16,7 +16,11 @@ from eco_council_runtime.kernel.execution.executor import maybe_text, new_runtim
 from eco_council_runtime.kernel.execution.gate import GateHandler
 from eco_council_runtime.kernel.core.ledger import append_ledger_event
 from eco_council_runtime.kernel.core.manifest import load_json_if_exists, write_json
-from eco_council_runtime.kernel.operator.surfaces import load_next_actions_wrapper
+from eco_council_runtime.kernel.operator.surfaces import (
+    load_next_actions_wrapper,
+    load_report_basis_freeze_wrapper,
+    load_round_readiness_wrapper,
+)
 from eco_council_runtime.kernel.core.paths import supervisor_state_path
 
 
@@ -52,6 +56,62 @@ def controller_uses_next_actions_surface(controller: dict[str, Any]) -> bool:
         for item in execution_queue
         if isinstance(item, dict)
     )
+
+
+def overlay_current_reporting_basis_state(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    controller: dict[str, Any],
+) -> dict[str, Any]:
+    """Prefer current DB-backed readiness/freeze state over stale controller fields."""
+    resolved = dict(controller)
+    artifacts = dict(resolved.get("artifacts", {})) if isinstance(resolved.get("artifacts"), dict) else {}
+    readiness_context = load_round_readiness_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    readiness_payload = (
+        readiness_context.get("payload")
+        if isinstance(readiness_context.get("payload"), dict)
+        else {}
+    )
+    if readiness_payload:
+        resolved["readiness_status"] = (
+            maybe_text(readiness_payload.get("readiness_status"))
+            or maybe_text(resolved.get("readiness_status"))
+        )
+        readiness_path = maybe_text(readiness_context.get("artifact_path"))
+        if readiness_path:
+            artifacts["readiness_path"] = readiness_path
+    freeze_context = load_report_basis_freeze_wrapper(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    freeze_payload = (
+        freeze_context.get("payload")
+        if isinstance(freeze_context.get("payload"), dict)
+        else {}
+    )
+    if freeze_payload:
+        resolved["report_basis_status"] = (
+            maybe_text(freeze_payload.get("report_basis_status"))
+            or maybe_text(resolved.get("report_basis_status"))
+        )
+        if maybe_text(freeze_payload.get("report_basis_status")) == "frozen":
+            resolved["gate_status"] = "report-basis-frozen"
+            resolved["recommended_next_skills"] = [
+                "materialize-reporting-handoff",
+                "draft-council-decision",
+            ]
+        freeze_path = maybe_text(freeze_context.get("artifact_path"))
+        if freeze_path:
+            artifacts["report_basis_freeze_path"] = freeze_path
+    resolved["artifacts"] = artifacts
+    return resolved
 
 
 def supervise_round(
@@ -273,6 +333,12 @@ def supervise_round_with_contract_mode(
         }
         raise SkillExecutionError(failure_payload.get("message", str(exc)), failure_payload)
     controller = controller_result.get("controller", {}) if isinstance(controller_result.get("controller"), dict) else {}
+    controller = overlay_current_reporting_basis_state(
+        run_dir,
+        run_id=run_id,
+        round_id=round_id,
+        controller=controller,
+    )
     artifacts = controller.get("artifacts", {}) if isinstance(controller.get("artifacts"), dict) else {}
     next_actions_path = maybe_text(artifacts.get("next_actions_path"))
     next_actions_context = (

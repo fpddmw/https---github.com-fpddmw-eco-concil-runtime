@@ -742,6 +742,10 @@ class AgentEntryGateTests(unittest.TestCase):
             self.assertIn("readable formal text", report_editor_boundary_surface)
             self.assertIn("formal-comment annotation basis", report_editor_boundary_surface)
             self.assertIn("physical source attribution", report_editor_boundary_surface)
+            report_editor_write_surface = "\n".join(report_editor_entries[0].get("write_commands", []))
+            self.assertIn("submit-agent-position", report_editor_write_surface)
+            self.assertIn("--actor-role report-editor", report_editor_write_surface)
+            self.assertNotIn("submit-readiness-opinion", report_editor_write_surface)
             self.assertIn(
                 "causal_or_source_attribution",
                 [

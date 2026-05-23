@@ -870,6 +870,24 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def normalize_argv_for_negative_bbox(argv: list[str] | None) -> list[str]:
+    """Allow `--bbox -74,...` even though argparse treats leading '-' as an option."""
+    items = list(sys.argv[1:] if argv is None else argv)
+    normalized: list[str] = []
+    index = 0
+    while index < len(items):
+        token = items[index]
+        if token == "--bbox" and index + 1 < len(items):
+            value = items[index + 1]
+            if value.startswith("-") and not value.startswith("--") and "," in value:
+                normalized.append(f"--bbox={value}")
+                index += 2
+                continue
+        normalized.append(token)
+        index += 1
+    return normalized
+
+
 def configure_logging(level: str, log_file: str) -> None:
     handlers: list[logging.Handler] = [logging.StreamHandler(sys.stderr)]
     if log_file:
@@ -885,7 +903,7 @@ def configure_logging(level: str, log_file: str) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(normalize_argv_for_negative_bbox(argv))
     if hasattr(args, "log_level"):
         configure_logging(args.log_level, getattr(args, "log_file", ""))
     else:

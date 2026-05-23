@@ -85,10 +85,12 @@ python3 scripts/fetch_gdelt_doc_search.py search \
 ```
 
 5. Lint a query before a remote call, especially when an agent authored it.
+   Wrap every boolean `OR` group in parentheses. The skill rejects
+   unparenthesized forms like `smoke OR advisory` before hitting the remote API.
 
 ```bash
 python3 scripts/fetch_gdelt_doc_search.py lint-query \
-  --query 'site:airnow.gov smoke' \
+  --query '(smoke OR advisory)' \
   --pretty
 ```
 
@@ -96,7 +98,7 @@ python3 scripts/fetch_gdelt_doc_search.py lint-query \
 
 ```bash
 python3 scripts/fetch_gdelt_doc_search.py search \
-  --query 'smoke wildfire "New York City"' \
+  --query '(smoke OR wildfire) "New York City"' \
   --domain-is airnow.gov \
   --domain-is epa.gov \
   --mode artlist \
@@ -126,6 +128,9 @@ python3 scripts/fetch_gdelt_doc_search.py search \
 - Throttle request frequency with a minimum interval between requests.
 - Validate query/time parameter combinations before remote calls.
 - Lint provider-specific query syntax before remote calls, including blocking unsupported `site:` usage.
+- Reject unparenthesized boolean `OR` groups locally. When repeated
+  `--domain` / `--domain-is` filters are used, the script also auto-groups a
+  top-level OR-only query before composing each domain query.
 - Support repeated `--domain` / `--domain-is` filters by running one query per domain and merging JSON article results.
 - Validate DOC constraints (`MAXRECORDS<=250`, `TIMELINESMOOTH<=30`).
 - Emit JSON results while writing operational logs to stderr and optional log file.
@@ -147,6 +152,10 @@ python3 scripts/fetch_gdelt_doc_search.py search \
 - `domain:` and `domainis:` are URL-domain filters. They are useful for exact
   source slices, but they are not official-record categories and should not be
   the only way an agent distinguishes official, media, or community material.
+- GDELT DOC boolean `OR` expressions must be parenthesized. Prefer compact
+  query units such as `(smoke OR advisory OR alert) "New York City"` and split
+  official domains with repeated `--domain-is` rather than one large boolean
+  expression.
 - A zero DOC result can mean the query, date window, domain filter, language, or
   DOC index path was too narrow. It does not mean GDELT Events, Mentions, GKG,
   or non-GDELT sources have no relevant records.

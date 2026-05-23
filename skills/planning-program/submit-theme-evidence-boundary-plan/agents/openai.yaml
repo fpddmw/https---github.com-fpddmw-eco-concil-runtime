@@ -2,7 +2,16 @@ name: submit-theme-evidence-boundary-plan
 description: Submit an investigator-authored or adopted theme evidence boundary plan.
 default_prompt: >
   Use $submit-theme-evidence-boundary-plan when you own or explicitly adopt an
-  investigation theme obligation. State evidence obligations, success criteria,
-  denominator obligations, recovery choices, and downgrade boundaries. Do not
-  state source families, source skills, query variants, query parameters, or
-  route rankings in this plan.
+  investigation theme obligation. Always provide author_role, authoring_mode
+  (`agent-authored` or `agent-adopted`), target_kind/target_id, theme_id,
+  sample_unit, claim_slots_supported, evidence obligations, success criteria,
+  denominator obligations, recovery choices, forbidden precommitments, and
+  downgrade boundaries. Provide `temporal_scope` or a structured
+  payload_json.time_window when possible; runtime will derive a schema-only
+  time_window from temporal_scope if needed. Do not state source families,
+  source skills, query variants, query parameters, or route rankings in this
+  plan. When calling the CLI, quote every multi-word value or use compact
+  identifiers such as `official/governance-record`; unquoted phrases become
+  stray arguments and create no council object. If you need to name a concrete
+  fetch skill or query, stop and use $submit-source-acquisition-proposal in a
+  later acquisition turn instead.

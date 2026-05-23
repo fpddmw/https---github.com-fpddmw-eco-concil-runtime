@@ -150,9 +150,20 @@ def load_claim_gap_action_cards(run_dir: Path, round_id: str) -> dict[str, Any]:
     }
 
 
+def latest_artifact_by_stem(run_dir: Path, file_stem: str, *, preferred_round_id: str = "") -> Path:
+    analytics_dir = run_dir / "analytics"
+    exact_path = analytics_dir / f"{file_stem}_{preferred_round_id}.json"
+    if preferred_round_id and exact_path.exists():
+        return exact_path
+    candidates = sorted(analytics_dir.glob(f"{file_stem}_*.json"))
+    return candidates[-1] if candidates else exact_path
+
+
 def load_interaction_timeline(run_dir: Path, round_id: str) -> dict[str, Any]:
-    artifact_path = (
-        run_dir / "analytics" / f"fact_policy_public_interaction_timeline_{round_id}.json"
+    artifact_path = latest_artifact_by_stem(
+        run_dir,
+        "fact_policy_public_interaction_timeline",
+        preferred_round_id=round_id,
     )
     if not artifact_path.exists():
         return {
@@ -209,7 +220,11 @@ def load_analysis_item_artifact(
     file_stem: str,
     item_key: str,
 ) -> dict[str, Any]:
-    artifact_path = run_dir / "analytics" / f"{file_stem}_{round_id}.json"
+    artifact_path = latest_artifact_by_stem(
+        run_dir,
+        file_stem,
+        preferred_round_id=round_id,
+    )
     if not artifact_path.exists():
         return {
             "present": False,
@@ -439,7 +454,68 @@ def query_round_council_objects(
     return [row for row in rows if isinstance(row, dict)]
 
 
-def load_reporting_basis_objects(run_dir: Path, *, run_id: str, round_id: str) -> dict[str, list[dict[str, Any]]]:
+def object_ref_ids_from_refs(values: list[Any]) -> list[str]:
+    ids: list[str] = []
+    for value in values:
+        text = maybe_text(value)
+        if not text or ":" not in text:
+            continue
+        prefix, suffix = text.split(":", 1)
+        if prefix in {"finding", "finding-record", "evidence-bundle", "proposal", "readiness-opinion", "review-comment", "challenge"} and suffix:
+            ids.append(suffix)
+    return unique_texts(ids)
+
+
+def row_selection_ids(object_kind: str, row: dict[str, Any]) -> list[str]:
+    values: list[Any] = [object_id_for(object_kind, row)]
+    values.extend(list_items(row.get("basis_object_ids")))
+    values.extend(list_items(row.get("linked_bundle_ids")))
+    values.extend(list_items(row.get("finding_ids")))
+    values.extend(list_items(row.get("lineage")))
+    values.extend(object_ref_ids_from_refs(list_items(row.get("evidence_refs"))))
+    target_kind = maybe_text(row.get("target_kind"))
+    target_id = maybe_text(row.get("target_id"))
+    if target_kind in {"finding", "finding-record", "evidence-bundle"} and target_id:
+        values.append(target_id)
+    target = row.get("target") if isinstance(row.get("target"), dict) else {}
+    if maybe_text(target.get("object_kind")) in {"finding", "finding-record", "evidence-bundle"}:
+        values.append(target.get("object_id"))
+    return unique_texts(values)
+
+
+def selected_basis_lookup_values(
+    *,
+    selected_basis_object_ids: list[str],
+    selected_evidence_refs: list[str],
+) -> set[str]:
+    return set(unique_texts(selected_basis_object_ids + object_ref_ids_from_refs(selected_evidence_refs)))
+
+
+def row_matches_reporting_selection(
+    *,
+    object_kind: str,
+    row: dict[str, Any],
+    round_id: str,
+    selected_evidence_refs: list[str],
+    selected_basis_lookup: set[str],
+) -> bool:
+    if maybe_text(row.get("round_id")) == round_id:
+        return True
+    row_ids = set(row_selection_ids(object_kind, row))
+    if row_ids.intersection(selected_basis_lookup):
+        return True
+    refs = set(evidence_refs_for(row))
+    return bool(refs.intersection(selected_evidence_refs))
+
+
+def load_reporting_basis_objects(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+    selected_basis_object_ids: list[str] | None = None,
+    selected_evidence_refs: list[str] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
     query_kinds_by_basis_kind = {
         "finding-record": "finding",
         "evidence-bundle": "evidence-bundle",
@@ -448,15 +524,38 @@ def load_reporting_basis_objects(run_dir: Path, *, run_id: str, round_id: str) -
         "challenge": "challenge",
         "review-comment": "review-comment",
     }
-    return {
-        basis_kind: query_round_council_objects(
+    selected_refs = unique_texts(selected_evidence_refs or [])
+    selected_lookup = selected_basis_lookup_values(
+        selected_basis_object_ids=selected_basis_object_ids or [],
+        selected_evidence_refs=selected_refs,
+    )
+    results: dict[str, list[dict[str, Any]]] = {}
+    for basis_kind, query_kind in query_kinds_by_basis_kind.items():
+        run_rows = query_round_council_objects(
             run_dir,
             run_id=run_id,
-            round_id=round_id,
+            round_id="",
             object_kind=query_kind,
+            limit=200,
         )
-        for basis_kind, query_kind in query_kinds_by_basis_kind.items()
-    }
+        rows: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for row in run_rows:
+            if not row_matches_reporting_selection(
+                object_kind=basis_kind,
+                row=row,
+                round_id=round_id,
+                selected_evidence_refs=selected_refs,
+                selected_basis_lookup=selected_lookup,
+            ):
+                continue
+            key = maybe_text(row.get("raw_json")) or json.dumps(row, ensure_ascii=True, sort_keys=True)
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(row)
+        results[basis_kind] = rows
+    return results
 
 
 def object_id_for(object_kind: str, row: dict[str, Any]) -> str:
@@ -1277,6 +1376,8 @@ def materialize_reporting_handoff_skill(
         run_dir_path,
         run_id=run_id,
         round_id=basis_round_id,
+        selected_basis_object_ids=selected_basis_object_ids,
+        selected_evidence_refs=selected_evidence_refs,
     )
     key_findings = build_key_findings_from_council_basis(
         council_basis,

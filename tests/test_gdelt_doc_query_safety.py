@@ -46,6 +46,37 @@ class GdeltDocQuerySafetyTests(unittest.TestCase):
         )
         self.assertTrue(all(module.lint_doc_query(query)["ok"] for query in queries))
 
+    def test_lint_rejects_unparenthesized_or(self) -> None:
+        module = load_gdelt_doc_module()
+
+        result = module.lint_doc_query('smoke OR "air quality" OR advisory')
+
+        self.assertFalse(result["ok"])
+        self.assertEqual("unparenthesized-or", result["errors"][0]["code"])
+
+    def test_domain_filter_auto_groups_top_level_or_query(self) -> None:
+        module = load_gdelt_doc_module()
+
+        query = module.compose_query(
+            'smoke OR "air quality" OR advisory',
+            "domainis:nyc.gov",
+        )
+
+        self.assertEqual(
+            'domainis:nyc.gov (smoke OR "air quality" OR advisory)',
+            query,
+        )
+        self.assertTrue(module.lint_doc_query(query)["ok"])
+
+    def test_parenthesized_or_query_passes_lint(self) -> None:
+        module = load_gdelt_doc_module()
+
+        result = module.lint_doc_query(
+            'domainis:nyc.gov (smoke OR "air quality" OR advisory) "New York City"'
+        )
+
+        self.assertTrue(result["ok"])
+
     def test_lint_query_cli_returns_structured_guidance(self) -> None:
         completed = subprocess.run(
             [
@@ -64,6 +95,30 @@ class GdeltDocQuerySafetyTests(unittest.TestCase):
         payload = json.loads(completed.stdout)
         self.assertFalse(payload["ok"])
         self.assertEqual("unsupported-operator-site", payload["queries"][0]["errors"][0]["code"])
+
+    def test_lint_query_cli_auto_groups_domain_or_query(self) -> None:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(script_path("fetch-gdelt-doc-search")),
+                "lint-query",
+                "--query",
+                'smoke OR "air quality" OR advisory',
+                "--domain-is",
+                "nyc.gov",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        payload = json.loads(completed.stdout)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(
+            'domainis:nyc.gov (smoke OR "air quality" OR advisory)',
+            payload["queries"][0]["query"],
+        )
 
     def test_merge_json_payloads_dedupes_articles(self) -> None:
         module = load_gdelt_doc_module()

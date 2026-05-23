@@ -41,6 +41,7 @@ description: Optional-analysis helper for summarizing a public discourse sample 
 
 ## Optional Input
 - `round_scope`
+- `source_round_id` (use when no corpus artifact is supplied and the analysis reads a specific prior acquisition round)
 - `corpus_path`
 - `coverage_audit_path`
 - `aggregation_path`

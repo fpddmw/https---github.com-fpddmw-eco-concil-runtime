@@ -243,7 +243,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
     },
     {
         "role": ROLE_REPORT_EDITOR,
-        "focus": "Read frozen evidence basis and reporting state, then draft or publish reporting artifacts without mutating investigation status.",
+        "focus": "Read frozen evidence basis and reporting state, record report-boundary positions when needed, then draft or publish reporting artifacts without mutating investigation status.",
         "role_boundary_guidance": {
             "schema_version": "role-boundary-guidance-v1",
             "claim_boundary_focus": [
@@ -267,6 +267,7 @@ DEFAULT_AGENT_ENTRY_ROLE_DEFINITIONS = [
             "query-environment-signals",
         ],
         "write_skills": [
+            "submit-agent-position",
             "materialize-reporting-handoff",
             "draft-council-decision",
             "draft-expert-report",

@@ -1277,6 +1277,14 @@ def challenger_boundary_review_visible(draft: dict[str, Any]) -> bool:
         for row in section_brief_rows(draft)
     ):
         return True
+    source_material = source_material_dict(draft)
+    role_counts = (
+        source_material.get("agent_role_counts")
+        if isinstance(source_material.get("agent_role_counts"), dict)
+        else {}
+    )
+    if int_value(role_counts.get("challenger")) > 0:
+        return True
     counts = council_object_counts(draft)
     return counts.get("review-comment", 0) > 0 or counts.get("challenge", 0) > 0
 
@@ -2854,7 +2862,7 @@ def validate_claim_boundary_semantics(
             counts.get(kind, 0) > 0
             for kind in ("finding", "evidence-bundle", "hypothesis", "hypothesis-status")
         )
-        has_challenger_review = counts.get("review-comment", 0) > 0 or counts.get("challenge", 0) > 0
+        has_challenger_review = challenger_boundary_review_visible(draft)
         if not has_environment_basis:
             issues.append(
                 issue(

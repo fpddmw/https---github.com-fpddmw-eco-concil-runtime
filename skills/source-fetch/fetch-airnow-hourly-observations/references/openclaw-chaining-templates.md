@@ -19,6 +19,10 @@ python3 scripts/fetch_airnow_hourly_observations.py fetch \
 Return the JSON result and confirm `[OUTPUT_FILE]`.
 ```
 
+When `MIN_LON` is negative, keep the equals sign exactly as shown
+(`--bbox=-74.30,40.45,-73.65,40.95`). Do not write `--bbox -74.30,...`;
+some argument parsers will treat the negative value as a new option.
+
 ## Pattern 2: Multi-Parameter Monitoring-Site Pull
 
 ```text
@@ -36,6 +40,9 @@ python3 scripts/fetch_airnow_hourly_observations.py fetch \
   --pretty
 Return the JSON payload and confirm `[OUTPUT_FILE]`.
 ```
+
+Use equals-form for copied commands with western-hemisphere bounding boxes:
+`--bbox=-74.30,40.45,-73.65,40.95`.
 
 ## Pattern 3: Preflight Then Execute
 

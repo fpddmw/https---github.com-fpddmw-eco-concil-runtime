@@ -363,11 +363,12 @@ def _load_discourse_signals(
     run_id: str,
     round_id: str,
     round_scope: str = "current",
+    source_round_id: str = "",
     limit: int,
 ) -> tuple[list[dict[str, Any]], str]:
     run_dir_path = resolve_run_dir(run_dir)
     normalized_scope = _normalized_round_scope(round_scope)
-    query_round_id = "" if normalized_scope == "run" else round_id
+    query_round_id = maybe_text(source_round_id) or ("" if normalized_scope == "run" else round_id)
     public_signals, db_path = query_signals(
         run_dir_path,
         run_id=run_id,
@@ -836,6 +837,7 @@ def _signals_from_corpus_or_db(
     run_id: str,
     round_id: str,
     round_scope: str = "current",
+    source_round_id: str = "",
     corpus_path: str,
     limit: int,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], str, list[dict[str, str]]]:
@@ -845,6 +847,7 @@ def _signals_from_corpus_or_db(
         run_id=run_id,
         round_id=round_id,
         round_scope=round_scope,
+        source_round_id=source_round_id,
         limit=limit,
     )
     if not corpus_payload:
@@ -1168,6 +1171,7 @@ def run_aggregate_public_discourse_annotations(
     run_id: str,
     round_id: str,
     round_scope: str = "current",
+    source_round_id: str = "",
     corpus_path: str = "",
     annotations_path: str = "",
     taxonomy_labels_path: str = "",
@@ -1184,6 +1188,7 @@ def run_aggregate_public_discourse_annotations(
         run_id=run_id,
         round_id=round_id,
         round_scope=normalized_round_scope,
+        source_round_id=source_round_id,
         corpus_path=corpus_path,
         limit=limit,
     )
@@ -1216,6 +1221,7 @@ def run_aggregate_public_discourse_annotations(
         "run_id": run_id,
         "round_id": round_id,
         "round_scope": normalized_round_scope,
+        "source_round_id": maybe_text(source_round_id),
         "sample_boundary": "DB-visible normalized public/formal text sample only",
         "text_unit": "normalized public/formal text-bearing signal",
         "dedupe_policy": "one corpus item per normalized signal_id after signal-plane dedupe",
@@ -1350,6 +1356,7 @@ def run_aggregate_public_discourse_annotations(
         "observed_inputs": {
             "db_path": db_path,
             "round_scope": normalized_round_scope,
+            "source_round_id": maybe_text(source_round_id),
             "corpus_path": maybe_text(corpus_path),
             "annotations_path": maybe_text(annotations_path),
             "taxonomy_labels_path": maybe_text(taxonomy_labels_path),
@@ -1489,6 +1496,7 @@ def run_compare_public_media_narratives(
     run_id: str,
     round_id: str,
     round_scope: str = "current",
+    source_round_id: str = "",
     corpus_path: str = "",
     aggregation_path: str = "",
     output_path: str = "",
@@ -1503,6 +1511,7 @@ def run_compare_public_media_narratives(
         run_id=run_id,
         round_id=round_id,
         round_scope=normalized_round_scope,
+        source_round_id=source_round_id,
         corpus_path=corpus_path,
         limit=limit,
     )
@@ -1602,6 +1611,7 @@ def run_compare_public_media_narratives(
         "observed_inputs": {
             "db_path": db_path,
             "round_scope": normalized_round_scope,
+            "source_round_id": maybe_text(source_round_id),
             "corpus_path": maybe_text(corpus_path),
             "aggregation_path": maybe_text(aggregation_path),
         },
@@ -1816,6 +1826,7 @@ def run_summarize_public_discourse_sample(
     run_id: str,
     round_id: str,
     round_scope: str = "current",
+    source_round_id: str = "",
     corpus_path: str = "",
     coverage_audit_path: str = "",
     aggregation_path: str = "",
@@ -1833,6 +1844,7 @@ def run_summarize_public_discourse_sample(
         run_id=run_id,
         round_id=round_id,
         round_scope=normalized_round_scope,
+        source_round_id=source_round_id,
         corpus_path=corpus_path,
         limit=limit,
     )
@@ -1981,6 +1993,7 @@ def run_summarize_public_discourse_sample(
         "observed_inputs": {
             "db_path": db_path,
             "round_scope": normalized_round_scope,
+            "source_round_id": maybe_text(source_round_id),
             "corpus_path": maybe_text(corpus_path),
             "coverage_audit_path": maybe_text(coverage_audit_path),
             "aggregation_path": maybe_text(aggregation_path),
@@ -2055,6 +2068,7 @@ def run_materialize_public_discourse_corpus(
     run_id: str,
     round_id: str,
     round_scope: str = "current",
+    source_round_id: str = "",
     output_path: str = "",
     source_family: str = "",
     source_skill: str = "",
@@ -2072,6 +2086,7 @@ def run_materialize_public_discourse_corpus(
         run_id=run_id,
         round_id=round_id,
         round_scope=normalized_round_scope,
+        source_round_id=source_round_id,
         limit=limit,
     )
     keywords = unique_texts(keyword_any or [])
@@ -2113,6 +2128,7 @@ def run_materialize_public_discourse_corpus(
         run_id,
         round_id,
         normalized_round_scope,
+        source_round_id,
         source_family,
         source_skill,
         keywords,
@@ -2126,6 +2142,7 @@ def run_materialize_public_discourse_corpus(
         "run_id": run_id,
         "round_id": round_id,
         "round_scope": normalized_round_scope,
+        "source_round_id": maybe_text(source_round_id),
         "source_family": maybe_text(source_family),
         "source_skill": maybe_text(source_skill),
         "keyword_any": keywords,
@@ -2203,6 +2220,7 @@ def run_materialize_public_discourse_corpus(
         "observed_inputs": {
             "db_path": db_path,
             "round_scope": normalized_round_scope,
+            "source_round_id": maybe_text(source_round_id),
             "available_signal_count": len(source_signals),
             "eligible_signal_count": len(eligible_signals),
             "matched_signal_count": len(matched_signals),
@@ -2444,6 +2462,7 @@ def run_audit_public_discourse_sample_coverage(
     run_id: str,
     round_id: str,
     round_scope: str = "current",
+    source_round_id: str = "",
     corpus_path: str = "",
     output_path: str = "",
     limit: int = 500,
@@ -2457,6 +2476,7 @@ def run_audit_public_discourse_sample_coverage(
         run_id=run_id,
         round_id=round_id,
         round_scope=normalized_round_scope,
+        source_round_id=source_round_id,
         limit=limit,
     )
     corpus_payload, corpus_warnings = _corpus_input_observation(corpus_path)
@@ -2489,6 +2509,7 @@ def run_audit_public_discourse_sample_coverage(
         run_id,
         round_id,
         normalized_round_scope,
+        source_round_id,
         corpus_path,
         len(source_signals),
     )[:12]
@@ -2581,12 +2602,18 @@ def run_audit_public_discourse_sample_coverage(
         "observed_inputs": {
             "db_path": db_path,
             "round_scope": normalized_round_scope,
+            "source_round_id": maybe_text(source_round_id),
             "corpus_path": maybe_text(corpus_path),
             "corpus_item_count": len(list_items(corpus_payload.get("corpus_items"))) if corpus_payload else 0,
             "source_acquisition_attempt_count": len(source_acquisition_attempts),
         },
         "source_parameters": {"db_path": db_path},
-        "query_parameters": {"run_id": run_id, "round_id": round_id, "round_scope": normalized_round_scope},
+        "query_parameters": {
+            "run_id": run_id,
+            "round_id": round_id,
+            "round_scope": normalized_round_scope,
+            "source_round_id": maybe_text(source_round_id),
+        },
         "provenance": {"source_skill": skill_name, "decision_source": metadata["decision_source"], "db_path": db_path},
         "warnings": warnings,
     }

@@ -35,6 +35,8 @@ __all__ = (
     "connect_db",
     "normalize_transition_kind",
     "transition_kind_spec",
+    "is_supplemental_round_request",
+    "validate_supplemental_round_target",
     "transition_request_id",
     "transition_approval_id",
     "transition_rejection_id",

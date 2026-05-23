@@ -18,6 +18,16 @@ from eco_council_runtime.optional_analysis import (  # noqa: E402
 )
 
 
+def split_source_round_ids(values: list[str]) -> list[str]:
+    result: list[str] = []
+    for value in values:
+        for item in value.split(","):
+            text = item.strip()
+            if text:
+                result.append(text)
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Build a descriptive fact/policy/public interaction timeline."
@@ -25,6 +35,13 @@ def main() -> int:
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--round-id", required=True)
+    parser.add_argument(
+        "--source-round-id",
+        action="append",
+        default=[],
+        help="Source round id to read normalized signals from. Repeat or pass a comma-separated list.",
+    )
+    parser.add_argument("--helper-round-id", default="")
     parser.add_argument("--output-path", default="")
     parser.add_argument("--max-nodes", type=int, default=200)
     parser.add_argument("--limit", type=int, default=100000)
@@ -37,6 +54,8 @@ def main() -> int:
         output_path=args.output_path,
         max_nodes=args.max_nodes,
         limit=args.limit,
+        source_round_ids=split_source_round_ids(args.source_round_id),
+        helper_round_id=args.helper_round_id,
     )
     print(pretty_json(payload, args.pretty))
     return 0

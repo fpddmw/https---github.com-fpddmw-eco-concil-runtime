@@ -26,6 +26,8 @@ description: Optional-analysis helper that aligns fact/policy-side and public/me
 - `round_id`
 
 ## Optional Input
+- `source_round_id` (repeatable or comma-separated): read environment/formal/public normalized signals from earlier acquisition or analysis rounds while writing the output to the current `round_id`.
+- `helper_round_id`: read public discourse helper artifacts from a prior public-semantics analysis round.
 - `output_path`
 - `max_nodes`
 - `limit`
@@ -37,6 +39,10 @@ description: Optional-analysis helper that aligns fact/policy-side and public/me
   public/media-side refs before downstream use.
 - Empty or one-sided output is visibility context only and does not prove that no
   interaction, public response, official action, or source evidence exists.
+- For analysis rounds whose evidence lives in prior rounds, pass explicit
+  `source_round_id` values rather than relying on the current round scope.
+  Use `helper_round_id` when the public discourse corpus/aggregation/summary
+  artifacts were materialized in a prior public-semantics round.
 - Timeline nodes must be composed from lane episode cards, not raw same-date signal co-visibility alone.
 - A council agent or report editor must explicitly carry useful nodes into a
   finding, evidence bundle, round synthesis, report section draft, or reporting

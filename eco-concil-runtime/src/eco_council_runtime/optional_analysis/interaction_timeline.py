@@ -118,6 +118,47 @@ def _helper_artifacts(run_dir: Path, round_id: str) -> list[dict[str, Any]]:
     return artifacts
 
 
+def _query_plane_signals_for_rounds(
+    run_dir: Path,
+    *,
+    run_id: str,
+    source_round_ids: list[str],
+    plane: str,
+    limit: int,
+) -> tuple[list[dict[str, Any]], str]:
+    signals: list[dict[str, Any]] = []
+    seen_signal_ids: set[str] = set()
+    db_path = ""
+    effective_limit = max(1, min(100000, int(limit or 200)))
+    for source_round_id in source_round_ids:
+        round_signals, round_db_path = query_signals(
+            run_dir,
+            run_id=run_id,
+            round_id=source_round_id,
+            plane=plane,
+            limit=effective_limit,
+        )
+        db_path = db_path or round_db_path
+        for signal in round_signals:
+            signal_id = maybe_text(signal.get("signal_id"))
+            if signal_id and signal_id in seen_signal_ids:
+                continue
+            if signal_id:
+                seen_signal_ids.add(signal_id)
+            signals.append(signal)
+            if len(signals) >= effective_limit:
+                return signals, db_path
+    if not db_path:
+        _, db_path = query_signals(
+            run_dir,
+            run_id=run_id,
+            round_id=source_round_ids[0] if source_round_ids else "",
+            plane=plane,
+            limit=1,
+        )
+    return signals, db_path
+
+
 def _semantic_distribution_cues(helper_artifacts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     aggregation = next(
         (
@@ -928,6 +969,8 @@ def run_build_fact_policy_public_interaction_timeline(
     output_path: str = "",
     max_nodes: int = 200,
     limit: int = 100000,
+    source_round_ids: list[str] | None = None,
+    helper_round_id: str = "",
 ) -> dict[str, Any]:
     skill_name = "build-fact-policy-public-interaction-timeline"
     run_dir_path = resolve_run_dir(run_dir)
@@ -936,24 +979,28 @@ def run_build_fact_policy_public_interaction_timeline(
         output_path,
         f"fact_policy_public_interaction_timeline_{round_id}.json",
     )
-    environment_signals, db_path = query_signals(
+    effective_source_round_ids = unique_values(
+        [maybe_text(item) for item in list(source_round_ids or []) if maybe_text(item)]
+    ) or [round_id]
+    effective_helper_round_id = maybe_text(helper_round_id) or round_id
+    environment_signals, db_path = _query_plane_signals_for_rounds(
         run_dir_path,
         run_id=run_id,
-        round_id=round_id,
+        source_round_ids=effective_source_round_ids,
         plane="environment",
         limit=limit,
     )
-    formal_signals, _ = query_signals(
+    formal_signals, _ = _query_plane_signals_for_rounds(
         run_dir_path,
         run_id=run_id,
-        round_id=round_id,
+        source_round_ids=effective_source_round_ids,
         plane="formal",
         limit=limit,
     )
-    public_signals, _ = query_signals(
+    public_signals, _ = _query_plane_signals_for_rounds(
         run_dir_path,
         run_id=run_id,
-        round_id=round_id,
+        source_round_ids=effective_source_round_ids,
         plane="public",
         limit=limit,
     )
@@ -971,7 +1018,7 @@ def run_build_fact_policy_public_interaction_timeline(
             "Public semantic claims still require corpus, coverage, denominator, and council/reporting uptake.",
         ],
     )
-    helper_artifacts = _helper_artifacts(run_dir_path, round_id)
+    helper_artifacts = _helper_artifacts(run_dir_path, effective_helper_round_id)
     interaction_nodes, parallel_nodes, warnings, basis, lane_episode_cards = (
         build_fact_policy_public_interaction_timeline(
             environment_signals=environment_signals,
@@ -987,6 +1034,8 @@ def run_build_fact_policy_public_interaction_timeline(
             max_nodes=max_nodes,
         )
     )
+    basis["source_round_ids"] = effective_source_round_ids
+    basis["helper_round_id"] = effective_helper_round_id
     helper_artifact_inputs = [
         {
             key: value
@@ -1048,6 +1097,8 @@ def run_build_fact_policy_public_interaction_timeline(
         "query_basis": {
             "run_id": run_id,
             "round_id": round_id,
+            "source_round_ids": effective_source_round_ids,
+            "helper_round_id": effective_helper_round_id,
             "db_path": db_path,
             "input_artifact_refs": [
                 artifact["artifact_ref"]

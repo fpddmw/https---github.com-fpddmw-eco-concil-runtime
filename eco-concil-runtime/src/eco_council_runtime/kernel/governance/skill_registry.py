@@ -1112,7 +1112,7 @@ POLICIES.update(
         "submit-agent-position": _policy(
             skill_name="submit-agent-position",
             skill_layer=SKILL_LAYER_DELIBERATION_WRITE,
-            allowed_roles=[ROLE_MODERATOR, *INVESTIGATOR_ROLES, ROLE_CHALLENGER],
+            allowed_roles=[ROLE_MODERATOR, *INVESTIGATOR_ROLES, ROLE_CHALLENGER, ROLE_REPORT_EDITOR],
             required_capabilities=[CAPABILITY_DISCUSSION_WRITE],
             side_effect_scope=["artifact-write", "db-write:deliberation"],
             db_write_planes=["deliberation"],

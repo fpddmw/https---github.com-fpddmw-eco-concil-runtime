@@ -58,6 +58,7 @@ UNSUPPORTED_QUERY_OPERATOR_SUGGESTIONS = {
     "site": "GDELT DOC does not support site:. Use --domain-is example.gov or query operator domainis:example.gov.",
     "inurl": "GDELT DOC does not support inurl:. Use domain:/domainis: filters plus content terms.",
 }
+OR_TOKEN_RE = re.compile(r"\bOR\b", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -140,6 +141,48 @@ def parse_timestamp(raw: str) -> datetime:
     return parsed.replace(tzinfo=timezone.utc)
 
 
+def iter_boolean_or_depths(query: str) -> list[int]:
+    """Return parenthesis depth for boolean OR tokens outside quoted phrases."""
+    depths: list[int] = []
+    depth = 0
+    quote: str | None = None
+    i = 0
+    while i < len(query):
+        ch = query[i]
+        if quote:
+            if ch == quote:
+                quote = None
+            i += 1
+            continue
+        if ch in {'"', "'"}:
+            quote = ch
+            i += 1
+            continue
+        if ch == "(":
+            depth += 1
+            i += 1
+            continue
+        if ch == ")":
+            depth = max(0, depth - 1)
+            i += 1
+            continue
+        match = OR_TOKEN_RE.match(query, i)
+        if match:
+            depths.append(depth)
+            i = match.end()
+            continue
+        i += 1
+    return depths
+
+
+def has_top_level_or(query: str) -> bool:
+    return any(depth == 0 for depth in iter_boolean_or_depths(query))
+
+
+def needs_domain_query_grouping(query: str) -> bool:
+    return has_top_level_or(query)
+
+
 def lint_doc_query(query: str) -> dict[str, Any]:
     normalized = query.strip()
     errors: list[dict[str, str]] = []
@@ -155,6 +198,17 @@ def lint_doc_query(query: str) -> dict[str, Any]:
                     "message": suggestion,
                 }
             )
+    if has_top_level_or(normalized):
+        errors.append(
+            {
+                "code": "unparenthesized-or",
+                "message": (
+                    "GDELT DOC requires OR expressions to be enclosed in parentheses. "
+                    "Use a query such as '(smoke OR advisory)' instead of "
+                    "'smoke OR advisory'."
+                ),
+            }
+        )
     if len(normalized) > DOC_API_QUERY_LENGTH_WARN_LIMIT:
         warnings.append(
             {
@@ -209,6 +263,8 @@ def domain_filters(args: argparse.Namespace) -> list[str]:
 
 def compose_query(base_query: str, domain_filter: str = "") -> str:
     query = base_query.strip()
+    if domain_filter and query and needs_domain_query_grouping(query):
+        query = f"({query})"
     if domain_filter:
         query = f"{domain_filter} {query}" if query else domain_filter
     return query.strip()

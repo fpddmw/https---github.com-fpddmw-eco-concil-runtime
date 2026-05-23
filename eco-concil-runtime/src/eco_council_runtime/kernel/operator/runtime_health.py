@@ -11,6 +11,26 @@ from eco_council_runtime.kernel.operator.admission_policy import load_admission_
 from eco_council_runtime.kernel.operator.dead_letters import load_dead_letters
 from eco_council_runtime.kernel.operator.operations_common import DEFAULT_HEALTH_SCHEMA, maybe_text, utc_now_iso
 
+
+SUPERSEDING_SUCCESS_STATUSES = {"completed", "completed-with-warnings"}
+
+
+def event_supersession_key(event: dict[str, Any]) -> tuple[str, str, str, str, str]:
+    operation_id = (
+        maybe_text(event.get("skill_name"))
+        or maybe_text(event.get("round_close_path"))
+        or maybe_text(event.get("transition_request_id"))
+        or maybe_text(event.get("event_type"))
+    )
+    return (
+        maybe_text(event.get("run_id")),
+        maybe_text(event.get("round_id")),
+        maybe_text(event.get("event_type")),
+        operation_id,
+        maybe_text(event.get("actor_role")),
+    )
+
+
 def runtime_health_payload(run_dir: Path, *, round_id: str = "") -> dict[str, Any]:
     ensure_runtime_dirs(run_dir)
     policy = load_admission_policy(run_dir)
@@ -34,17 +54,11 @@ def runtime_health_payload(run_dir: Path, *, round_id: str = "") -> dict[str, An
     completed_keys_after: set[tuple[str, str, str, str, str]] = set()
     superseded_blocked_event_ids: set[str] = set()
     for event in reversed(filtered_events):
-        key = (
-            maybe_text(event.get("run_id")),
-            maybe_text(event.get("round_id")),
-            maybe_text(event.get("event_type")),
-            maybe_text(event.get("skill_name")),
-            maybe_text(event.get("actor_role")),
-        )
+        key = event_supersession_key(event)
         if not key[3]:
             continue
         status = maybe_text(event.get("status"))
-        if status == "completed":
+        if status in SUPERSEDING_SUCCESS_STATUSES:
             completed_keys_after.add(key)
         elif status == "blocked" and key in completed_keys_after:
             event_id = maybe_text(event.get("event_id"))

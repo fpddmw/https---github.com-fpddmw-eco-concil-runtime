@@ -22,6 +22,7 @@ from eco_council_runtime.kernel.governance.transition_requests.common import (
     transition_request_id,
     unique_texts,
     utc_now_iso,
+    validate_supplemental_round_target,
 )
 
 def transition_request_payload(
@@ -68,6 +69,11 @@ def transition_request_payload(
     )
     if normalized_kind in target_required_transition_kinds and not normalized_target_round_id:
         raise ValueError(f"{normalized_kind} requests require a target_round_id.")
+    validate_supplemental_round_target(
+        transition_kind=normalized_kind,
+        target_round_id=normalized_target_round_id,
+        request_payload=request_payload,
+    )
     resolved_requested_by_role = normalize_actor_role(requested_by_role) or maybe_text(
         requested_by_role
     )

@@ -2,7 +2,7 @@
 
 文档性质：本文是当前工程工作计划。旧版公共政策形势分析升级计划已删除；其中需要长期保留的原则已并入 `docs/openclaw-project-overview.md`、`docs/openclaw-source-family-workflows.md` 和 `docs/openclaw-claim-strength-obligations.md`。
 
-本文的目的不是只植入目标拆分，而是把现有 runtime 议会结构升级为 report-driven、program-aware、theme-aware、supplement-capable 的议会程序。核心目标是让 OpenClaw 从“单轮或多轮调查后拼报告”升级为“前置议会把报告需求转化为后续议会议题问题，每个 council round 围绕一个或一组问题式议题组织 agent responsibility boundaries，并在不足时通过同轮获取/分析 turn 或针对性补充轮继续推进”。
+本文的目的不是只植入目标拆分，而是把现有 runtime 议会结构升级为 report-driven、program-aware、theme-aware、supplement-capable 的议会程序。核心目标是让 OpenClaw 从“单轮或多轮调查后拼报告”升级为“前置议会把报告需求转化为后续议会议题问题，每个 council round 围绕一个或一组问题式议题组织 agent responsibility boundaries，并在不足时通过同轮获取/分析 turn 或针对性补充轮继续推进，最终在报告前形成一份能组织事实、公共语义、官方行动和政策评估边界的形势分析综合包”。
 
 ## 1. 当前判断
 
@@ -27,7 +27,8 @@
 2. 这些问题如何拆成 investigation themes。
 3. 后续有哪些 council agenda questions，每个 round 围绕哪些问题式议题、责任边界和退出条件组织讨论。
 4. 某个议题目标未满足时，是当前 round 内增加 acquisition turn / analysis turn，降级，scope out，还是打开哪个 supplemental council round。
-5. 报告撰写轮如何接收各 agent 的 section brief，而不是只接收事实材料。
+5. 报告撰写轮如何接收各 agent 的 section brief 和形势分析综合包，而不是只接收事实材料。
+6. 如何把已采信的事实过程、官方行动、公共/媒体/政策语义和互动时间线组织成回答 mission 的分析主线，而不是让 narrative report 脚本从散装对象里拼接文章。
 
 ## 2. 不可违反的边界
 
@@ -42,12 +43,13 @@
 9. sufficiency/progress review 不是 runtime 判真机制，不给证据打分，不自动决定 report-ready；它只建议 disposition，最终仍要通过 council object、moderator synthesis、readiness opinion、report-basis gate 或 transition approval 承接。
 10. `policy_evaluation_basis` 是报告综合层产物，由事实、官方行动、公众/媒体/正式语义、治理记录和 challenger limitations 共同支撑；它不是独立数据 lane。
 11. runtime 只负责对象、权限、审批、ledger、transition 和可执行命令模板；不替 moderator 组织议程，不替 agents 判断证据。
+12. `situation-analysis-brief` 是报告前的解释性综合对象，不是新数据源、不是新调查 round、不是 runtime gate、不是 evidence sufficiency 判定器。它只能综合已经被 section brief、frozen basis、council object、accepted progress/sufficiency review 或 challenger boundary 承接的材料；它不得新增事实、不得替 agents 采信证据、不得替 moderator 决定收口。
 
 ## 3. 目标工作流
 
 目标链路：
 
-`mission -> round-001-framing-scope -> report_blueprint -> agent positions -> council-investigation-program -> program-aware issue round briefs -> issue council rounds with acquisition/analysis turns -> in-round progress feedback -> supplemental issue rounds when needed -> agent section briefs -> report writing round -> validator/backtest`
+`mission -> round-001-framing-scope -> report_blueprint -> agent positions -> council-investigation-program -> program-aware issue round briefs -> issue council rounds with acquisition/analysis turns -> in-round progress feedback -> supplemental issue rounds when needed -> agent section briefs -> situation-analysis brief -> reporting handoff -> report writing round -> validator/backtest`
 
 推荐 round 语义：
 
@@ -72,7 +74,7 @@
    - `round_mode`: `report-writing`
    - `round_category`: `reporting`
    - `round_subtitle_question`: `哪些议会已采信材料可以进入报告，哪些只能作为限制或后续工作？`
-   - 目标：基于 frozen/reporting basis、agent section briefs 和 sufficiency/progress review 写报告。
+   - 目标：基于 frozen/reporting basis、agent section briefs、situation-analysis brief 和 sufficiency/progress review 写报告。
 
 `round_id` 采用文件系统安全短 id；可读标题写入 `round_title`，副标题优先采用问题形式写入 `round_subtitle_question`。不要把冒号、长中文标题或不可控字符放进 `round_id`。数据获取和数据分析/综合不应被伪装成同一种“调查轮”；它们通常是 issue council round 内不同的 agent work turns，只有当议题边界、责任边界或议会采信需要重新组织时，才升级为 supplemental council round。
 
@@ -218,7 +220,55 @@
 3. challenger 提交 unsupported wording、denominator、causal overreach 和 policy-evaluation boundary brief。
 4. report-editor 新增实质 claim 必须能回溯到 section brief、frozen basis 或 council object。
 
-### 4.6 Skill taxonomy and directory layout
+### 4.6 `situation-analysis-brief`
+
+用途：报告撰写前的形势分析综合包。它把 agent section briefs、frozen/reporting basis、interaction timeline、theme progress review、challenger boundaries 和 policy evaluation basis 组织成一条可写作的分析主线，解决“材料有了但报告仍像材料堆叠”的问题。
+
+它不是新的数据源、不是新调查轮、不是报告正文、不是 runtime gate，也不是证据充分性判定器。它只回答：在当前已采信边界内，本报告应如何把事实、官方行动、公共语义、政策语义和限制组织成一篇面向用户问题的形势分析。
+
+建议字段：
+
+1. `brief_id`
+2. `program_id`
+3. `basis_round_id`
+4. `mission_answerable_question`
+5. `central_bounded_judgement`
+6. `event_stage_map`
+7. `fact_process_chain`
+8. `official_action_chain`
+9. `public_semantic_chain`
+10. `policy_semantic_chain`
+11. `interaction_claims`
+12. `policy_evaluation_basis`
+13. `downgraded_claims`
+14. `unresolved_claim_needs`
+15. `section_brief_refs`
+16. `basis_object_ids`
+17. `evidence_refs`
+18. `challenger_boundary_refs`
+19. `recommended_report_spine`
+20. `forbidden_writing_upgrades`
+
+报告组织义务：
+
+1. `event_stage_map` 应按议题自身形态组织阶段，例如突发空气质量事件可分为 lead-in、onset、peak、persistence、decline、post-event review；慢变量治理争议可分为 background pressure、formal agenda setting、public participation、policy conflict、report boundary。
+2. `fact_process_chain` 说明事实过程如何成立，以及哪些事实只支持描述、相容性或关系判断。
+3. `public_semantic_chain` 说明公众/媒体/正式文本中的关切、叙事、情绪或来源解释如何变化；必须保留样本、分母和代表性边界。
+4. `official_action_chain` 和 `policy_semantic_chain` 说明官方行动和政策语言何时出现、回应了哪些公共关切、哪些没有被现有证据证明已经回应。
+5. `interaction_claims` 只能承接已有 interaction timeline、lane episode cards 或 agent section brief；同日可见不能升级为因果、政策效果或公众响应归因。
+6. `policy_evaluation_basis` 只能说明准备度、沟通时机、内容、覆盖、参与、缓解部署等可由当前材料支撑的评价边界；不得给政策成败打分。
+7. `recommended_report_spine` 是写作主线建议，不是固定模板。report-editor 可重组结构，但新增实质 claim 必须回溯到 brief 或上游 basis。
+
+验收：
+
+1. brief 能直接回答 mission 中“本报告应说明什么”，而不是只列材料来源。
+2. brief 至少串联 fact / official action / public or media semantics / policy evaluation boundary 中的三类；若某类缺失，必须写 source-limit 或 downgrade rationale。
+3. brief 对每个强一点的结论给出 basis refs 或 section brief refs。
+4. brief 明确列出不能写的升级表述，例如代表性公众比例、GDELT tone 等同公众情绪、公共来源叙事等同物理归因、政策有效性因果断言。
+5. brief 不新增事实，不重读 helper artifact 来绕过 report basis，不把 optional-analysis 结果直接提升为报告结论。
+6. narrative report 应优先消费该 brief；如果 handoff 中没有 situation-analysis brief，validator 应标记为 `missing-situation-analysis-brief` 或等价 warning，除非报告类型明确不是形势分析。
+
+### 4.7 Skill taxonomy and directory layout
 
 用途：降低 skill 数量带来的认知负担，让议会程序和 runtime surfaces 能按职责发现 skill，而不是面对一个 100+ 项平铺列表。
 
@@ -246,7 +296,7 @@
 7. `skills/optional-analysis/`
    - coverage audit、corpus、annotation、aggregation、timeline、action cards、evidence sufficiency、representation audit。
 8. `skills/reporting/`
-   - section brief、handoff、draft、publish、validator-adjacent reporting skills。
+   - section brief、situation-analysis brief、handoff、draft、publish、validator-adjacent reporting skills。
 9. `skills/archive-history/`
    - archive、history context、case library。
 
@@ -373,16 +423,20 @@
 任务：
 
 1. 让 `draft-agent-section-brief` 读取 program/theme/progress review。
-2. reporting handoff 汇总 agent section briefs、theme progress、frozen basis 和 unresolved limitations。
-3. narrative report 渲染事实核查、公共/政策语义、互动时间线和政策评估依据边界。
-4. validator 检查实质 claim 是否有 section brief、frozen basis、council object 或 accepted sufficiency/progress review 支撑。
+2. 新增或重构 `materialize-situation-analysis-brief`，从 agent section briefs、theme progress、frozen basis、interaction timeline、policy evaluation basis 和 challenger boundaries 生成形势分析综合包。
+3. reporting handoff 汇总 agent section briefs、situation-analysis brief、theme progress、frozen basis 和 unresolved limitations。
+4. narrative report 优先消费 situation-analysis brief，围绕 mission answer、事件阶段、事实过程、公共/政策语义互动和政策评估边界写成文章；不得再主要依赖脚本从散装对象里拼接章节。
+5. validator 检查实质 claim 是否有 section brief、situation-analysis brief、frozen basis、council object 或 accepted sufficiency/progress review 支撑，并检查报告是否真正回答 mission、是否有形势分析主线、是否存在未完成审计索引、指令残留或 runtime 元话语过多。
 
 验收：
 
 1. 其它 agents 实质参与报告内容组织。
-2. policy / official action lane 缺失时，报告只能写缺口、source-limit 或后续评估维度，不能写政策有效性结论。
-3. interaction claim 必须能回溯到 fact/policy/public 至少两类 refs 和 timeline node summary。
-4. 强 claim、政策评估、公众比例、因果/归因表述必须能看到 challenger 的边界审查痕迹；否则 validator 或 handoff 应标记为 unsupported / downgrade-required。
+2. situation-analysis brief 能把事实过程、官方行动、公共/媒体/政策语义和 policy evaluation boundary 组织成一条主线，而不是材料清单。
+3. policy / official action lane 缺失时，报告只能写缺口、source-limit 或后续评估维度，不能写政策有效性结论。
+4. interaction claim 必须能回溯到 fact/policy/public 至少两类 refs 和 timeline node summary。
+5. 强 claim、政策评估、公众比例、因果/归因表述必须能看到 challenger 的边界审查痕迹；否则 validator 或 handoff 应标记为 unsupported / downgrade-required。
+6. 形势分析报告若缺少 situation-analysis brief，或报告正文把互动/舆情只作为附录堆叠，validator 应给出 blocking issue 或 high-severity warning。
+7. report Markdown 不得残留“报告应写出”“本节应说明”等指令语，不得出现未完成 bullet 或只有 `see JSON` 的审计尾巴。
 
 ### Phase 7: Skill Registry 和目录治理
 
@@ -415,7 +469,8 @@
 
 1. 新 framing 输出不再只是“事实/政策/公众/互动”粗分，而是具体规划后续 issue questions、issue council rounds、internal acquisition/analysis turns、supplemental policy 和 agent responsibility boundaries。
 2. 不出现 moderator/report-editor 预填 source family 或 query route 的问题。
-3. full run 报告具备事实核查、舆情/政策语义主线、互动时间线和政策评估依据边界。
+3. full run 在 report-writing 前生成 situation-analysis brief，并能从其中追踪报告主线、事件阶段、互动分析和降级边界。
+4. full run 报告具备事实核查、舆情/政策语义主线、互动时间线和政策评估依据边界。
 
 ## 6. 非目标
 
@@ -433,6 +488,8 @@
 12. 不把 `policy_evaluation_basis` 做成独立数据 lane。
 13. 不把 `council-investigation-program` 做成 scheduler、source planner、query planner 或 action queue。
 14. 不把数据获取和数据分析/综合混为同一种泛化 investigation round；也不把普通数据获取 turn 自动升级为 council round。
+15. 不把 `situation-analysis-brief` 做成第二个 narrative report composer、事实生成器、证据采信器或自动报告通过门；它只组织已采信材料之间的分析关系。
+16. 不在当前阶段引入强制 `dossier-first` 全量主题报告管线、operator theme-report adoption gate 或每个最终报告必须具备固定 theme dossier 的厚流程。主题档案和主题子报告可以作为后续可选深化能力，但当前主线以 agent section brief、situation-analysis brief、reporting handoff 和 validator 加固为准。
 
 ## 7. 最终完成标准
 
@@ -440,7 +497,7 @@
 
 1. `council-investigation-program`、program-aware `round-brief`、theme progress review 和 supplemental round context 均可写入、查询、回归。
 2. `open-investigation-round` 与现有 transition request / approval / ledger 结构深度衔接。
-3. agent entry、prepare-round、reporting handoff 和 validator 都能读取 program context。
+3. agent entry、prepare-round、situation-analysis brief、reporting handoff 和 validator 都能读取 program context。
 4. skill registry 支持分类目录和递归 discovery；agent/operator 不再面对无分类平铺 skill 列表。
 
 议会流程完成标准：
@@ -453,5 +510,7 @@
 报告完成标准：
 
 1. 报告有事实核查、舆情与政策语义、互动时间线和政策评估依据边界。
-2. 报告能说明哪些 claim 被支撑、哪些被降级、哪些缺 basis。
-3. 所有强 claim 都能回溯到 section brief、frozen basis、council object 或 accepted progress/sufficiency review。
+2. 报告前存在可审计的 situation-analysis brief，能说明事件阶段、事实过程、官方行动、公共/媒体/政策语义互动、政策评估边界和降级结论。
+3. 报告能说明哪些 claim 被支撑、哪些被降级、哪些缺 basis。
+4. 所有强 claim 都能回溯到 section brief、situation-analysis brief、frozen basis、council object 或 accepted progress/sufficiency review。
+5. 报告正文以回答 mission 和形势分析主线为中心，而不是材料清单、round 日志、runtime 说明或审计对象摘要。

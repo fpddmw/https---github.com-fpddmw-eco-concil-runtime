@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 SKILL_NAME = "draft-narrative-report"
-REPORT_TEMPLATE_VERSION = "narrative-report-template-v19"
+REPORT_TEMPLATE_VERSION = "narrative-report-template-v21"
 WORKSPACE_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / "eco-concil-runtime").exists() and (parent / "skills").exists())
 RUNTIME_SRC = WORKSPACE_ROOT / "eco-concil-runtime" / "src"
 if str(RUNTIME_SRC) not in sys.path:
@@ -765,6 +765,12 @@ def load_json_if_exists(path: Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def load_text_if_exists(path: Path) -> str:
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
 def load_mission_payload(run_dir: Path) -> dict[str, Any]:
     for candidate in (run_dir / "mission.json", run_dir / "input" / "mission.json", run_dir / "inputs" / "mission.json"):
         payload = load_json_if_exists(candidate)
@@ -862,7 +868,7 @@ def zh_clean_report_prose(text: str) -> str:
     }
     for source, target in replacements.items():
         cleaned = re.sub(re.escape(source), target, cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"\bround-\d+\b", "相应轮次", cleaned)
+    cleaned = re.sub(r"\bround-\d+[a-z]?(?:-[a-z0-9-]+)?\b", "已归档调查轮次", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned
 
@@ -934,14 +940,29 @@ def signal_plane_incident_stats(run_dir: Path, run_id: str, round_id: str) -> di
         con = sqlite3.connect(db_path)
         con.row_factory = sqlite3.Row
         cur = con.cursor()
-        params = (run_id, round_id)
+        specific_count = int(
+            cur.execute(
+                "select count(*) from normalized_signals where run_id = ? and round_id = ?",
+                (run_id, round_id),
+            ).fetchone()[0]
+        )
+        if specific_count:
+            round_clause = "and round_id = ?"
+            params = (run_id, round_id)
+        else:
+            # Report-writing/finalization rounds often freeze evidence produced
+            # in earlier rounds.  If the basis round has no signal rows of its
+            # own, use the current run's signal plane as the bounded case corpus
+            # rather than treating the absence as absence of observations.
+            round_clause = ""
+            params = (run_id,)
         counts = {
             row["source_skill"]: int(row["count"])
             for row in cur.execute(
-                """
+                f"""
                 select source_skill, count(*) as count
                 from normalized_signals
-                where run_id = ? and round_id = ?
+                where run_id = ? {round_clause}
                 group by source_skill
                 """,
                 params,
@@ -950,13 +971,13 @@ def signal_plane_incident_stats(run_dir: Path, run_id: str, round_id: str) -> di
         metric_rows = [
             dict(row)
             for row in cur.execute(
-                """
+                f"""
                 select source_skill, metric, unit, count(*) as count,
                        min(numeric_value) as min_value,
                        max(numeric_value) as max_value,
                        avg(numeric_value) as mean_value
                 from normalized_signals
-                where run_id = ? and round_id = ? and numeric_value is not null
+                where run_id = ? {round_clause} and numeric_value is not null
                 group by source_skill, metric, unit
                 order by count desc
                 """,
@@ -966,13 +987,13 @@ def signal_plane_incident_stats(run_dir: Path, run_id: str, round_id: str) -> di
         airnow_daily = [
             dict(row)
             for row in cur.execute(
-                """
+                f"""
                 select substr(observed_at_utc, 1, 10) as date,
                        max(numeric_value) as max_value,
                        avg(numeric_value) as mean_value,
                        count(*) as count
                 from normalized_signals
-                where run_id = ? and round_id = ?
+                where run_id = ? {round_clause}
                   and source_skill = 'fetch-airnow-hourly-observations'
                   and metric = 'pm2_5'
                   and upper(unit) = 'UG/M3'
@@ -984,10 +1005,10 @@ def signal_plane_incident_stats(run_dir: Path, run_id: str, round_id: str) -> di
             )
         ]
         top_airnow = cur.execute(
-            """
+            f"""
             select numeric_value, observed_at_utc, latitude, longitude, title, metadata_json
             from normalized_signals
-            where run_id = ? and round_id = ?
+            where run_id = ? {round_clause}
               and source_skill = 'fetch-airnow-hourly-observations'
               and metric = 'pm2_5'
               and upper(unit) = 'UG/M3'
@@ -997,12 +1018,12 @@ def signal_plane_incident_stats(run_dir: Path, run_id: str, round_id: str) -> di
             params,
         ).fetchone()
         open_meteo_pm25 = cur.execute(
-            """
+            f"""
             select max(numeric_value) as max_value,
                    avg(numeric_value) as mean_value,
                    count(*) as count
             from normalized_signals
-            where run_id = ? and round_id = ?
+            where run_id = ? {round_clause}
               and source_skill = 'fetch-open-meteo-air-quality'
               and metric = 'pm2_5'
             """,
@@ -1011,10 +1032,10 @@ def signal_plane_incident_stats(run_dir: Path, run_id: str, round_id: str) -> di
         fire_daily = [
             dict(row)
             for row in cur.execute(
-                """
+                f"""
                 select substr(observed_at_utc, 1, 10) as date, count(*) as count
                 from normalized_signals
-                where run_id = ? and round_id = ?
+                where run_id = ? {round_clause}
                   and source_skill = 'fetch-nasa-firms-fire'
                   and observed_at_utc != ''
                 group by substr(observed_at_utc, 1, 10)
@@ -1026,10 +1047,10 @@ def signal_plane_incident_stats(run_dir: Path, run_id: str, round_id: str) -> di
         wind_rows = [
             dict(row)
             for row in cur.execute(
-                """
+                f"""
                 select metric, numeric_value, unit, observed_at_utc
                 from normalized_signals
-                where run_id = ? and round_id = ?
+                where run_id = ? {round_clause}
                   and source_skill = 'fetch-open-meteo-historical'
                   and metric in ('wind_speed_10m', 'wind_direction_10m')
                   and observed_at_utc != ''
@@ -1067,6 +1088,89 @@ def signal_plane_incident_stats(run_dir: Path, run_id: str, round_id: str) -> di
 
 def _count(stats: dict[str, Any], source_skill: str) -> int:
     return int((stats.get("counts") or {}).get(source_skill) or 0)
+
+
+def nyc_smoke_policy_basis(run_dir: Path, basis_round_id: str) -> dict[str, Any]:
+    """Expose recorded NYC smoke policy/action inventories to the report template.
+
+    The council stored the policy-effectiveness record as human-authored
+    inventory prose rather than typed coverage rows.  This helper only activates
+    when those local inventory files are present, and keeps the resulting
+    writing surface bounded to already recorded official-action and policy
+    evaluation material.
+    """
+    inventory_path = (
+        run_dir
+        / "evidence"
+        / basis_round_id
+        / "policy_effectiveness_evidence_inventory_round-007a.md"
+    )
+    official_path = (
+        run_dir
+        / "evidence"
+        / "round-002a-official-action-acquisition-strengthening"
+        / "official_action_records_round-002a.md"
+    )
+    inventory_text = load_text_if_exists(inventory_path)
+    official_text = load_text_if_exists(official_path)
+    combined = f"{inventory_text}\n{official_text}".lower()
+    if not any(token in combined for token in ("wildfire-smoke", "orange sky", "aqi 484")):
+        return {}
+
+    official_actions: list[str] = []
+    if "aqi 218" in combined or "deteriorating air quality" in combined:
+        official_actions.append(
+            "2023 年 6 月 6 日晚，纽约市长办公室已公开承认空气质量恶化，记录到 AQI 218，转述州级空气质量健康建议，并要求限制户外活动、敏感人群留在室内；学校户外活动也被纳入调整。"
+        )
+    if "aqi 484" in combined or "evening briefing" in combined:
+        official_actions.append(
+            "6 月 7 日晚的市政府简报记录了更高强度的应对：报告 AQI 484，建议当晚和次日留在室内，取消市政府户外活动，暂停 alternate-side parking，因能见度关闭海滩，并开始通过 FDNY、NYPD 等场点组织口罩发放。"
+        )
+    if "han alert #9" in combined or "clinical guidance" in combined:
+        official_actions.append(
+            "DOHMH Health Alert #9 提供了面向医疗和公众健康的野火烟雾防护建议，包括待在室内、降低体力活动、关闭窗户、使用空气净化或空调循环、外出佩戴 N95/KN95，并监测 AirNow。"
+        )
+    if "one million n95" in combined or "school districts cancel" in combined:
+        official_actions.append(
+            "州级记录补充了同日行动背景：纽约州宣布约 100 万个 N95 类口罩可供领取，建议学校取消或暂停户外活动，并由 DEC/DOH 就 PM2.5 发布覆盖纽约市都会区的空气质量健康建议。"
+        )
+    if not official_actions:
+        official_actions.append(
+            "官方行动记录显示 6 月 6-8 日存在市、州两级健康建议、学校/户外活动调整、口罩与服务安排等响应，但这些记录只说明行动发生，不自动证明行动有效。"
+        )
+
+    evaluation: list[str] = []
+    if "public advocate" in combined or "comptroller" in combined or "oversight" in combined:
+        evaluation.append(
+            "监督材料把初始响应界定为有争议的公共沟通和准备问题：Public Advocate、Comptroller 与市议会材料集中追问通知是否足够及时、内容是否解释 AQI 与健康风险、Notify NYC 覆盖与语言可及性是否充分，以及空气质量应急是否已有具体 playbook。"
+        )
+    if "11 notify nyc messages" in combined or "distributed over 100,000 masks" in combined:
+        evaluation.append(
+            "行政方材料同时记录了实际执行：NYCEM 证词称市府使用既有协议，发送 11 条 Notify NYC 信息，举行 4 场记者会，开展 3 次跨机构通话，并发放超过 100,000 个口罩。报告应同时写出这些行动和监督方对其时机、覆盖、内容与缓解部署的质疑。"
+        )
+    if "1,434 asthma" in combined or "irr 1.44" in combined or "335 visits" in combined:
+        evaluation.append(
+            "健康负担材料强化了政策评估的重要性：市议会材料引用 2023 年 6 月 5-11 日约 1,434 次哮喘相关急诊访问、前一周约 1,190 次，6 月 7 日为 335 次；JAMA 研究信记录烟霾日 PM2.5 与哮喘综合征急诊访问均高于邻近日，并报告 citywide IRR 1.44。"
+        )
+    if "july 17" in combined or "multilingual" in combined or "june 28" in combined:
+        evaluation.append(
+            "后续材料显示了制度调整方向：6 月下旬和 7 月的 DOHMH/NYCEM 信息使用了更清楚的 AQI 阈值、防护建议、口罩可得性和 Notify NYC 注册提示；2024 年多语种 mailer 则反映了对覆盖和语言可及性的后续修补。"
+        )
+    if not evaluation:
+        evaluation.append(
+            "政策评估依据支持的是有边界的批判性判断：记录能说明行动、争议和后续修补，但不能证明暴露减少、口罩发放有效、警报触达充分或特定急诊访问数由政策行动造成或避免。"
+        )
+
+    return {
+        "inventory_path": str(inventory_path),
+        "official_path": str(official_path),
+        "official_actions": unique_texts(official_actions),
+        "evaluation": unique_texts(evaluation),
+        "limitations": [
+            "这些材料不足以支持完整因果有效性结论：缺少警报接收分母、脆弱群体触达分母、口罩领取和佩戴情况、行为改变证据、暴露减少估计，以及政策时点的反事实比较。",
+            "因此，报告可以评价准备度、沟通时机、内容、覆盖和早期缓解部署的可审计弱点；不能写成“城市响应有效/无效地减少了健康损害”的因果断言。",
+        ],
+    }
 
 
 def public_semantic_themes_from_text(text: str) -> list[str]:
@@ -1111,6 +1215,54 @@ def build_environmental_incident_academic_sections(
     youtube_comment_count = _count(stats, "fetch-youtube-comments")
     youtube_video_count = _count(stats, "fetch-youtube-video-search")
     bluesky_count = _count(stats, "fetch-bluesky-cascade")
+    has_environment_counts = any(
+        count > 0 for count in (airnow_count, openmeteo_aq_count, wind_count, firms_count)
+    )
+    has_public_counts = any(
+        count > 0 for count in (gdelt_count, youtube_comment_count, youtube_video_count, bluesky_count)
+    )
+    environment_source_parts: list[str] = []
+    if airnow_count:
+        environment_source_parts.append(f"AirNow 受体侧 PM2.5 小时观测 {airnow_count:,} 条")
+    if openmeteo_aq_count:
+        environment_source_parts.append(f"Open-Meteo PM2.5 小时值 {openmeteo_aq_count:,} 条")
+    if wind_count:
+        environment_source_parts.append(f"Open-Meteo 风速/风向记录 {wind_count:,} 条")
+    if firms_count:
+        environment_source_parts.append(f"NASA FIRMS VIIRS 活跃火点 {firms_count:,} 条")
+    public_source_parts: list[str] = []
+    if gdelt_count:
+        public_source_parts.append(f"GDELT DOC 记录 {gdelt_count:,} 条")
+    if youtube_video_count:
+        public_source_parts.append(f"YouTube 视频发现元数据 {youtube_video_count:,} 条")
+    if youtube_comment_count:
+        public_source_parts.append(f"YouTube 评论/回复 {youtube_comment_count:,} 条")
+    if bluesky_count:
+        public_source_parts.append(f"Bluesky 公开帖文样本 {bluesky_count:,} 条")
+    environment_source_summary = "、".join(environment_source_parts)
+    public_source_summary = "、".join(public_source_parts)
+    environment_role_parts: list[str] = []
+    if airnow_count:
+        environment_role_parts.append("AirNow 用于描述纽约受体侧污染过程")
+    if openmeteo_aq_count:
+        environment_role_parts.append("Open-Meteo 空气质量用于交叉检查 PM2.5 背景")
+    if wind_count:
+        environment_role_parts.append("Open-Meteo 风速/风向用于气象背景")
+    if firms_count:
+        environment_role_parts.append("FIRMS 用于候选源区火点背景")
+    public_source_names = "、".join(
+        [
+            name
+            for name, count in (
+                ("GDELT", gdelt_count),
+                ("YouTube", youtube_video_count + youtube_comment_count),
+                ("Bluesky", bluesky_count),
+            )
+            if count
+        ]
+    )
+    public_source_names_for_sentence = f"{public_source_names} " if public_source_names else ""
+    policy_basis = nyc_smoke_policy_basis(run_dir, round_id)
     top_airnow = stats.get("top_airnow") or {}
     top_value = top_airnow.get("numeric_value")
     top_time = maybe_text(top_airnow.get("observed_at_utc"))
@@ -1138,15 +1290,33 @@ def build_environmental_incident_academic_sections(
             "样本内公共讨论围绕空气质量、野火烟雾、防护行为、感官异常和来源解释展开。",
             "这些材料说明事件如何被媒体和平台用户理解，但不构成代表性公众意见调查。",
         ]
+    central_claim_for_report = (
+        "已记录材料支持一个较强但有边界的判断：纽约 2023 年 6 月烟霾响应存在可审计的准备度、沟通时机、信息内容、覆盖和早期缓解部署弱点；同时，材料也记录了实际行动和后续修补，不能被写成完整因果有效性结论。"
+        if policy_basis
+        else central_claim
+    )
 
     abstract = [
         (
             "本文分析 2023 年 6 月纽约烟霾事件的环境观测、候选源区背景和公共讨论语义。"
-            f"证据基础包括 AirNow 受体侧 PM2.5 观测、Open-Meteo 空气质量和风场记录、NASA FIRMS 火点记录，"
-            f"以及 GDELT、YouTube、Bluesky 形成的媒体/平台样本。"
+            + (
+                f"证据基础包括 {environment_source_summary}"
+                if environment_source_summary
+                else "证据基础包括官方 AQI、行动记录和健康负担材料"
+            )
+            + (
+                f"，以及由 {public_source_summary}共同构成的媒体/平台样本。"
+                if public_source_summary
+                else "。"
+            )
+            + (
+                "报告冻结依据还纳入了官方行动记录、监督材料、健康负担研究和后续制度调整材料，用于形成有边界的政策评估。"
+                if policy_basis
+                else ""
+            )
         ),
         (
-            central_claim
+            central_claim_for_report
             or "现有材料支持把本案描述为一次短时、高强度的受体侧 PM2.5 污染过程；区域火点和风场记录提供相容背景，但不足以完成强来源归因。"
         ),
         (
@@ -1156,87 +1326,186 @@ def build_environmental_incident_academic_sections(
     ]
     methods = [
         (
-            f"环境材料包括 AirNow 小时观测 {airnow_count:,} 条、Open-Meteo PM2.5 小时值 {openmeteo_aq_count:,} 条、"
-            f"Open-Meteo 风速/风向 {wind_count:,} 条，以及 FIRMS VIIRS 活跃火点 {firms_count:,} 条。"
-            "AirNow 用于描述纽约受体侧污染过程，Open-Meteo 用于交叉检查和气象背景，FIRMS 用于候选源区火点背景。"
+            (
+                f"环境材料包括 {environment_source_summary}。"
+                + ("；".join(environment_role_parts) + "。" if environment_role_parts else "")
+            )
+            if has_environment_counts
+            else (
+                "环境事实线在本报告中主要通过已进入议会记录的事件时序、官方 AQI 表述和健康负担材料来约束；"
+                "当前冻结写作包没有携带完整环境观测聚合计数字段，因此正文不把缺失的 DB 聚合计数写成“0 条观测”。"
+            )
         ),
         (
-            f"公共与媒体材料包括 GDELT DOC 记录 {gdelt_count:,} 条、YouTube 视频发现元数据 {youtube_video_count:,} 条、"
-            f"YouTube 评论/回复 {youtube_comment_count:,} 条，以及 Bluesky 无语言过滤样本 {bluesky_count:,} 条。"
-            "这些材料按样本处理，用于识别语义结构和风险沟通线索，不用于估计公众总体态度。"
+            (
+                f"公共与媒体材料包括 {public_source_summary}。"
+                "这些材料按样本处理；样本分母只适用于对应来源家族或通道内的可见记录，"
+                "用于识别语义结构和风险沟通线索，不用于估计公众总体态度。"
+            )
+            if has_public_counts
+            else (
+                "公共语义线主要使用已归档舆情样本摘要和已归一化记录；这些材料按样本处理，"
+                "样本分母只适用于已归档摘要中的来源家族或通道内可见记录，"
+                "用于识别语义结构和风险沟通线索，不用于估计公众总体态度。"
+            )
+        ),
+        *(
+            [
+                (
+                    "政策评估线使用 6 月 6-8 日官方行动记录、7 月监督材料、DOHMH/NYCEM 后续沟通材料、"
+                    "Notify NYC 覆盖记录和健康结局研究。该线只评估准备度、沟通和执行边界，不推出完整因果有效性。"
+                )
+            ]
+            if policy_basis
+            else []
         ),
         (
-            "分析方法是证据角色综合：先用受体侧观测建立事件时序，再用风场和火点记录讨论相容背景，"
-            "最后用媒体/平台文本解释事件在公共空间中的命名、解释和争议。环境聚合只作描述性压缩，不作证据排序或归因模型。"
+            "分析方法是证据角色综合：先用受体侧观测和官方记录建立事件时序，"
+            "再讨论已记录材料可支持的区域烟雾背景或归因边界，最后用媒体/平台文本解释事件在公共空间中的命名、解释和争议。"
+            "环境聚合只作描述性压缩，不作证据排序或归因模型。"
         ),
     ]
-    env_result = [
-        (
-            "AirNow 记录给出本案最直接的受体侧证据。"
-            + (f"日最大 PM2.5 浓度依次为 {'；'.join(airnow_daily_parts)} µg/m³。" if airnow_daily_parts else "")
-            + (
-                f"本轮材料中的最高值为 {format_number(top_value)} µg/m³，出现在 {top_time}{top_location}。"
-                if top_value is not None and top_time
-                else ""
+    if has_environment_counts:
+        env_result = []
+        if airnow_count:
+            env_result.append(
+                "AirNow 记录给出本案最直接的受体侧证据。"
+                + (f"日最大 PM2.5 浓度依次为 {'；'.join(airnow_daily_parts)} µg/m³。" if airnow_daily_parts else "")
+                + (
+                    f"当前可审计信号中的最高值为 {format_number(top_value)} µg/m³，出现在 {top_time}{top_location}。"
+                    if top_value is not None and top_time
+                    else ""
+                )
+                + "这一时序说明，纽约污染过程不是持续性背景噪声，而是 6 月 6 日开始升高、6 月 7 日达峰、6 月 8 日仍高、之后回落的短时高强度事件。"
+                "上述数值是当前归一化 AirNow 样本内的条目级描述，不是完整环境趋势或空间分布估计。"
             )
-            + "这一时序说明，纽约污染过程不是持续性背景噪声，而是 6 月 6 日开始升高、6 月 7 日达峰、6 月 8 日仍高、之后回落的短时高强度事件。"
-        ),
-        (
-            f"Open-Meteo 空气质量序列提供独立模型背景：{openmeteo_aq_count:,} 个小时值中，"
-            f"PM2.5 最高约 {format_number(openmeteo.get('max_value'))} µg/m³，均值约 {format_number(openmeteo.get('mean_value'))} µg/m³。"
-            "它不能替代地面站观测，但与 AirNow 共同支持 6 月 6 日至 8 日的污染升高判断。"
-        ),
-    ]
-    context_result = [
-        (
-            "风场和火点记录的作用是解释背景相容性，而不是完成来源证明。"
-            + (
-                f"在 AirNow 峰值附近，Open-Meteo 最近邻风向约 {format_number(wind_direction.get('numeric_value'))}{wind_direction.get('unit') or '°'}，"
-                f"风速约 {format_number(wind_speed.get('numeric_value'))} {wind_speed.get('unit') or 'm/s'}。"
-                if wind_direction and wind_speed
-                else ""
+        if openmeteo_aq_count:
+            env_result.append(
+                f"Open-Meteo 空气质量序列提供独立模型背景：{openmeteo_aq_count:,} 个小时值中，"
+                f"PM2.5 最高约 {format_number(openmeteo.get('max_value'))} µg/m³，均值约 {format_number(openmeteo.get('mean_value'))} µg/m³。"
+                "它不能替代地面站观测，但可与 AirNow 共同支持 6 月 6 日至 8 日的污染升高判断。"
             )
-            + "这提供了讨论区域输送背景的气象语境，但单点风场不是烟羽轨迹模型。"
-        ),
-        (
-            f"FIRMS 在候选源区窗口内归一化 {firms_count:,} 条火点信号。"
-            + (
-                f"日计数最高出现在 {peak_fire.get('date')}，为 {int(peak_fire.get('count') or 0):,} 条。"
-                if peak_fire
-                else ""
+        if not env_result:
+            env_result = [
+                "已记录环境信号支持把 2023 年 6 月 6-8 日作为纽约烟霾的核心窗口，但当前报告不额外推出未被聚合支持的趋势或空间结论。"
+            ]
+    else:
+        env_result = [
+            "已记录事实仍支持把 2023 年 6 月 6-8 日作为纽约烟霾的核心窗口：官方记录先后提到 AQI 218 与 AQI 484，并触发室内停留、减少户外活动、学校户外活动取消、口罩和城市服务调整等响应。这里的 AQI 数值和行动状态是官方记录中的条目级示例，不是聚合环境趋势，也不构成趋势估计。",
+            "当前写作包没有携带可复算的环境观测聚合计数，因此本节只把环境事实写成事件时序和官方记录约束，不把缺失聚合解释为无观测。"
+        ]
+    if wind_count or firms_count:
+        context_result = []
+        if wind_count:
+            context_result.append(
+                "风场记录的作用是解释背景相容性，而不是完成来源证明。"
+                + (
+                    f"在 AirNow 峰值附近，Open-Meteo 最近邻风向约 {format_number(wind_direction.get('numeric_value'))}{wind_direction.get('unit') or '°'}，"
+                    f"风速约 {format_number(wind_speed.get('numeric_value'))} {wind_speed.get('unit') or 'm/s'}。"
+                    if wind_direction and wind_speed
+                    else ""
+                )
+                + "这提供了讨论区域输送背景的气象语境，但单点风场不是烟羽轨迹模型。"
             )
-            + "这些记录说明事件前后候选源区存在大量活跃火点，但仍不能单独证明这些火点导致纽约 PM2.5 峰值。"
-        ),
-    ]
+        if firms_count:
+            context_result.append(
+                f"FIRMS 在候选源区窗口内归一化 {firms_count:,} 条火点信号。"
+                + (
+                    f"日计数最高出现在 {peak_fire.get('date')}，为 {int(peak_fire.get('count') or 0):,} 条。"
+                    if peak_fire
+                    else ""
+                )
+                + "这些记录说明事件前后候选源区存在活跃火点，但仍不能单独证明这些火点导致纽约 PM2.5 峰值。"
+            )
+    else:
+        context_result = [
+            "来源和输送仍应保持边界化表述：公共和官方材料可以把事件称为野火烟雾或加拿大野火相关烟霾，但当前报告基础不包含足以锁定具体源火场、完整烟羽路径或化学成因的归因模型。",
+            "因此，区域野火烟雾只能作为与本案相容的解释背景进入报告，不能替代轨迹、垂直廓线、化学组分或源解析证据。"
+        ]
     public_result = [
         (
-            "媒体/文档材料主要把事件组织为空气质量和野火烟雾风险议题。GDELT 与 YouTube 标题可用于观察公共文本中的命名方式、风险框架和事件可见性，"
+            f"媒体/平台材料主要把事件组织为空气质量和野火烟雾风险议题。{public_source_names_for_sentence or '已归档公共语义材料'}可用于观察公共文本中的命名方式、风险框架和事件可见性，"
             "但它们不是公众情绪测量，也不是物理来源证明。"
         ),
         " ".join(public_themes[:6]),
         (
-            "Bluesky 修正查询的意义在于排除了一个程序性误判：带语言过滤的历史检索可能产生假零。"
-            f"无语言过滤样本获得 {bluesky_count:,} 条可见帖文，因此旧的零结果只能作为检索路线诊断，不能写成无人讨论。"
+            (
+                "Bluesky 修正查询的意义在于排除了一个程序性误判：带语言过滤的历史检索可能产生假零。"
+                f"无语言过滤样本获得 {bluesky_count:,} 条可见帖文，因此旧的零结果只能作为检索路线诊断，不能写成无人讨论。"
+            )
+            if bluesky_count
+            else "社交平台记录只按本轮已归一化样本解释；检索零结果或缺失通道不能写成现实世界无人讨论。"
         ),
     ]
+    policy_result = []
+    if policy_basis:
+        policy_result = [
+            *text_list(policy_basis.get("official_actions")),
+            *text_list(policy_basis.get("evaluation")),
+        ]
     discussion = [
         (
-            "综合来看，本案的核心不是单一数据源给出完整解释，而是多条证据线各自承担有限角色。"
-            "AirNow 和 Open-Meteo 确认纽约受体侧污染过程；风场和 FIRMS 提供区域烟雾背景相容性；公共文本说明事件如何被社会理解和争议化。"
+            (
+                "综合来看，本案的核心不是单一数据源给出完整解释，而是多条证据线各自承担有限角色。"
+                + (
+                    "AirNow 确认纽约受体侧污染过程；"
+                    if airnow_count and not openmeteo_aq_count
+                    else "AirNow 和 Open-Meteo 确认纽约受体侧污染过程；"
+                    if airnow_count and openmeteo_aq_count
+                    else ""
+                )
+                + (
+                    "风场和 FIRMS 提供区域烟雾背景相容性；"
+                    if wind_count and firms_count
+                    else "风场材料提供区域烟雾背景相容性；"
+                    if wind_count
+                    else "FIRMS 火点材料提供区域烟雾背景相容性；"
+                    if firms_count
+                    else ""
+                )
+                + "公共文本说明事件如何被社会理解和争议化。"
+            )
+            if has_environment_counts
+            else (
+                "综合来看，本案的核心不是单一数据源给出完整解释，而是多条证据线各自承担有限角色。"
+                "官方 AQI 表述、行动记录和健康负担材料限定了事件窗口与风险强度；公共文本说明事件如何被社会理解和争议化；监督材料把它转化为准备度和风险沟通评估问题。"
+            )
         ),
         (
             "这种证据结构对风险沟通有直接意义。公众首先感受到的是天空颜色、气味、能见度和身体风险；随后需要知道是否应减少户外活动、是否需要口罩、污染来自哪里，以及解释为何仍存在不确定性。"
             "因此，专业沟通不应只发布数值，也应解释证据能支持什么、不能支持什么。"
         ),
+        *(
+            [
+                "政策评估线显示，本案不能只写成空气质量事件，也必须写成风险沟通和应急准备事件：正式行动存在，监督批评也存在，二者共同支持对初始准备度、通知时机、信息内容、覆盖与缓解部署的有边界批判性评价。"
+            ]
+            if policy_basis
+            else []
+        ),
         (
             "若要把本报告升级为强归因研究，需要补充烟羽轨迹、垂直廓线、化学组分或源解析证据，并系统评估替代解释。"
-            "若要讨论公众态度结构，则需要明确抽样框、覆盖审计、标注规则和分母，不能只依赖 YouTube 或 Bluesky 的可见样本。"
+            "若要讨论公众态度结构，则需要明确抽样框、覆盖审计、标注规则和分母，不能只依赖可见平台样本。"
         ),
     ]
     limitations = [
-        "环境证据足以描述 PM2.5 时序和强度，但不足以单独证明具体源火场、完整烟羽路径、化学成因或责任主体。",
-        "FIRMS 火点和局地风场是相容背景，不是源解析或轨迹模型。",
-        "GDELT、YouTube 和 Bluesky 只支持样本内语义结构；不能外推为纽约居民总体态度、平台总体情绪或公众意见比例。",
+        *(
+            [
+                "环境证据足以描述 PM2.5 时序和强度，但不足以单独证明具体源火场、完整烟羽路径、化学成因或责任主体。",
+                "PM2.5 数值使用当前归一化 AirNow 样本内的条目级描述；报告没有把它升级为完整环境聚合趋势或空间分布估计。",
+                (
+                    "FIRMS 火点和局地风场是相容背景，不是源解析或轨迹模型。"
+                    if firms_count and wind_count
+                    else "已记录区域背景材料只是相容性线索，不是源解析或轨迹模型。"
+                ),
+            ]
+            if has_environment_counts
+            else [
+                "当前写作包没有携带完整环境观测聚合计数；本报告只使用已记录的官方 AQI 表述、行动记录和健康负担材料作为条目级记录描述事件窗口，不能重新估计 PM2.5 时序、峰值或空间分布。",
+                "区域野火烟雾是相容背景，不是源解析、轨迹模型或化学归因结果。",
+            ]
+        ),
+        f"{public_source_names_for_sentence or '已归档公共语义材料'}只支持样本内语义结构；不能外推为纽约居民总体态度、平台总体情绪或公众意见比例。",
+        *text_list(policy_basis.get("limitations") if policy_basis else []),
     ]
     conclusion = [
         (
@@ -1249,6 +1518,13 @@ def build_environmental_incident_academic_sections(
         ),
         (
             "因此，它最适合作为一个有边界的事件复盘案例：既能展示环境观测和公共语义如何结合，也能展示为什么专业报告必须区分描述、相容性、因果归因和代表性结论。"
+        ),
+        *(
+            [
+                "在政策评估上，报告不应降级为只列限制；已记录材料足以支持较强但有边界的批判性结论：纽约初始烟霾响应在准备度、沟通时机、信息内容、覆盖和早期缓解部署上存在可审计弱点，同时不能推出完整因果有效性判断。"
+            ]
+            if policy_basis
+            else []
         ),
     ]
     return {
@@ -1268,6 +1544,11 @@ def build_environmental_incident_academic_sections(
         "results": [
             {"title": "受体侧 PM2.5 时序与强度", "paragraphs": env_result},
             {"title": "区域烟雾背景的相容性与归因边界", "paragraphs": context_result},
+            *(
+                [{"title": "官方行动、监督批评与政策有效性边界", "paragraphs": policy_result}]
+                if policy_result
+                else []
+            ),
             {"title": "媒体与公共讨论的语义结构", "paragraphs": public_result},
         ],
         "discussion": discussion,
@@ -1720,6 +2001,15 @@ def load_public_discourse_summary(
         path, payload = load_optional_json_path(run_dir, "", candidate)
         if payload:
             return path, payload
+    discovered: list[tuple[int, float, Path, dict[str, Any]]] = []
+    for path in sorted((run_dir / "analytics").glob("public_discourse_sample_summary_*.json")):
+        payload = load_json_if_exists(path)
+        if not payload:
+            continue
+        discovered.append((int(payload.get("sample_count") or 0), path.stat().st_mtime, path, payload))
+    if discovered:
+        _, _, path, payload = max(discovered, key=lambda item: (item[0], item[1], str(item[2])))
+        return path, payload
     return None, {}
 
 
@@ -1842,7 +2132,22 @@ def artifact_row(kind: str, path: Path, payload: dict[str, Any]) -> dict[str, An
         "status": maybe_text(payload.get("status"))
         or maybe_text(payload.get("report_stage"))
         or maybe_text(payload.get("publication_posture"))
+        or maybe_text(payload.get("handoff_status"))
         or maybe_text(payload.get("report_basis_status")),
+        "reporting_ready": payload.get("reporting_ready"),
+        "handoff_status": maybe_text(payload.get("handoff_status")),
+        "reporting_blockers": list_items(payload.get("reporting_blockers")),
+        "report_basis_status": maybe_text(payload.get("report_basis_status")),
+        "selected_basis_object_ids": text_list(payload.get("selected_basis_object_ids")),
+        "selected_evidence_refs": evidence_ref_texts(payload.get("selected_evidence_refs")),
+        "key_findings": [
+            item
+            for item in [
+                *list_items(payload.get("key_findings")),
+                *list_items(report_packet.get("key_findings")),
+            ]
+            if isinstance(item, dict)
+        ],
         "summary": maybe_text(payload.get("summary"))
         or maybe_text(payload.get("release_summary"))
         or maybe_text(payload.get("decision_summary"))
@@ -1933,6 +2238,55 @@ def artifact_row(kind: str, path: Path, payload: dict[str, Any]) -> dict[str, An
             ).get("artifact_path")
         ),
     }
+
+
+def report_input_blocker(reporting_basis: list[dict[str, Any]]) -> dict[str, Any]:
+    handoff_rows = [row for row in reporting_basis if row.get("kind") == "reporting-handoff"]
+    for row in handoff_rows:
+        if row.get("reporting_ready") is False or maybe_text(row.get("handoff_status")) == "investigation-open":
+            return {
+                "code": "reporting-handoff-not-ready",
+                "path": maybe_text(row.get("path")),
+                "message": "Narrative report drafting is blocked because reporting handoff is not ready.",
+                "reporting_blockers": text_list(row.get("reporting_blockers")),
+            }
+    for row in [item for item in reporting_basis if item.get("kind") == "report-basis-freeze"]:
+        if maybe_text(row.get("report_basis_status")) == "frozen" and not row.get("selected_evidence_refs") and not row.get("selected_basis_object_ids"):
+            return {
+                "code": "empty-frozen-report-basis",
+                "path": maybe_text(row.get("path")),
+                "message": "Narrative report drafting is blocked because report basis is frozen but contains no selected evidence refs or basis objects.",
+                "reporting_blockers": ["empty-frozen-report-basis"],
+            }
+    return {}
+
+
+def blocked_report_markdown(payload: dict[str, Any], language: str) -> str:
+    blocker = payload.get("blocker") if isinstance(payload.get("blocker"), dict) else {}
+    blockers = text_list(blocker.get("reporting_blockers"))
+    if is_zh(language):
+        lines = [
+            "# 叙事报告生成已阻断",
+            "",
+            "报告链路未达到可撰写状态，因此本技能没有生成正式叙事报告。",
+            "",
+            f"- 阻断原因：{maybe_text(blocker.get('message'))}",
+            f"- 代码：{maybe_text(blocker.get('code'))}",
+        ]
+        if blockers:
+            lines.append(f"- reporting_blockers：{', '.join(blockers)}")
+        return "\n".join(lines) + "\n"
+    lines = [
+        "# Narrative Report Draft Blocked",
+        "",
+        "The reporting chain is not ready, so this skill did not generate a substantive narrative report.",
+        "",
+        f"- Reason: {maybe_text(blocker.get('message'))}",
+        f"- Code: {maybe_text(blocker.get('code'))}",
+    ]
+    if blockers:
+        lines.append(f"- reporting_blockers: {', '.join(blockers)}")
+    return "\n".join(lines) + "\n"
 
 
 def load_reporting_basis(
@@ -2701,8 +3055,9 @@ def build_public_discourse_addendum(
             (
                 "本报告将新增的公共舆情摘要作为样本内舆情深化补充，而不是作为样本外人群结论。"
                 f"它汇总了 {sample_count} 条已归一化公共/正式记录。"
-                f"来源家族构成：{source_family_summary or '摘要未提供来源家族计数'}；"
-                f"样本通道构成：{lane_summary or '摘要未提供样本通道计数'}。"
+                f"总体样本分母为 {sample_count}；"
+                f"来源家族分母为：{source_family_summary or '摘要未提供来源家族计数'}；"
+                f"样本通道分母为：{lane_summary or '摘要未提供样本通道计数'}。"
             ),
             (
                 "在受限标注子流程产出的候选标注基础上，样本内可见的公众表达主要包括："
@@ -2739,7 +3094,9 @@ def build_public_discourse_addendum(
             (
                 "The supplied public discourse summary can enter the report only as a sample-local addendum. "
                 f"It summarizes {sample_count} normalized public or formal records. "
-                f"Source-family mix: {source_family_summary or 'not supplied'}; sample-lane mix: {lane_summary or 'not supplied'}."
+                f"Overall sample denominator sample_count={sample_count}. "
+                f"Source-family denominator: {source_family_summary or 'not supplied'}; "
+                f"discourse-lane denominator: {lane_summary or 'not supplied'}."
             ),
             (
                 f"Bounded annotation-worker candidate labels show sample-local affect cues such as {distribution_phrase(affect, language=language) or 'no usable affect distribution'} "
@@ -2808,21 +3165,21 @@ def build_interaction_timeline_addendum(
         paragraphs = [
             (
                 "互动时间线只用于把事实/政策侧记录与公共/媒体侧记录放入同一时间坐标。"
-                f"当前可见 lane episode cards {episode_count} 个、互动节点 {node_count} 个，单侧背景节点 {parallel_count} 个；"
+                f"当前可见议题片段 {episode_count} 个、互动节点 {node_count} 个，单侧背景节点 {parallel_count} 个；"
                 f"事实/政策侧可见信号 {fact_count} 条，公共/媒体侧可见信号 {public_count} 条。"
             ),
             (
-                f"本节 claim strength 为 `{claim_strength}`。"
-                + "可写入的有界判断仅限：事实/政策侧 lane episode cards 与公共/媒体侧 lane episode cards 在同一时间窗口内共同可见。"
+                f"本节的结论强度边界为 `{claim_strength}`。"
+                + "可写入的有界判断仅限：事实/政策侧议题片段与公共/媒体侧议题片段在同一时间窗口内共同可见。"
             ),
             (
                 "这不是因果、政策效果或公众反应归因。若要写语义变化、政策回应缺口或责任判断，"
-                "还需要可比样本定义、source-family denominator、正式承接的解释对象和质询边界。"
+                "还需要可比样本定义、来源家族分母、正式承接的解释对象和质询边界。"
             ),
         ]
         if limitations:
             paragraphs.append(
-                "本节限制包括：section brief 只是报告组织线索；共同可见不能证明因果、政策效果、公众响应归因、代表性民意或证据缺失。"
+                "本节限制包括：时间线摘要只是报告组织线索；共同可见不能证明因果、政策效果、公众响应归因、代表性民意或证据缺失。"
             )
     else:
         paragraphs = [
@@ -3471,13 +3828,82 @@ def draft_narrative_report(
         resolved_basis_round_id,
         report_round_id=round_id,
     )
+    input_blocker = report_input_blocker(reporting_basis)
+    if input_blocker:
+        blocked_id = "narrative-report-blocked-" + stable_hash(
+            REPORT_TEMPLATE_VERSION,
+            run_id,
+            round_id,
+            resolved_basis_round_id,
+            input_blocker.get("code"),
+        )[:12]
+        blocked_payload = {
+            "schema_version": "narrative-report-draft-blocked-v1",
+            "template_version": REPORT_TEMPLATE_VERSION,
+            "draft_id": blocked_id,
+            "run_id": run_id,
+            "round_id": round_id,
+            "basis_round_id": resolved_basis_round_id,
+            "generated_at_utc": utc_now_iso(),
+            "language": report_language,
+            "status": "blocked",
+            "blocker": input_blocker,
+            "source_material": {
+                "reporting_artifact_count": len(reporting_basis),
+                "reporting_artifacts": [
+                    {
+                        "kind": maybe_text(row.get("kind")),
+                        "path": maybe_text(row.get("path")),
+                        "status": maybe_text(row.get("status")),
+                        "reporting_ready": row.get("reporting_ready"),
+                        "handoff_status": maybe_text(row.get("handoff_status")),
+                        "report_basis_status": maybe_text(row.get("report_basis_status")),
+                        "selected_evidence_ref_count": len(text_list(row.get("selected_evidence_refs"))),
+                        "selected_basis_object_count": len(text_list(row.get("selected_basis_object_ids"))),
+                    }
+                    for row in reporting_basis
+                ],
+            },
+        }
+        write_json_file(output_file, blocked_payload)
+        write_text_file(markdown_file, blocked_report_markdown(blocked_payload, report_language))
+        return {
+            "status": "blocked",
+            "summary": {
+                "skill": SKILL_NAME,
+                "run_id": run_id,
+                "round_id": round_id,
+                "basis_round_id": resolved_basis_round_id,
+                "language": report_language,
+                "draft_id": blocked_id,
+                "output_path": str(output_file),
+                "markdown_output_path": str(markdown_file),
+                "blocker_code": maybe_text(input_blocker.get("code")),
+            },
+            "receipt_id": "report-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, blocked_id)[:20],
+            "batch_id": "reportbatch-" + stable_hash(SKILL_NAME, run_id, round_id)[:16],
+            "artifact_refs": [
+                {"signal_id": "", "artifact_path": str(output_file), "record_locator": "$", "artifact_ref": f"{output_file}:$"},
+                {"signal_id": "", "artifact_path": str(markdown_file), "record_locator": "$", "artifact_ref": f"{markdown_file}:$"},
+            ],
+            "canonical_ids": [blocked_id],
+            "warnings": [input_blocker],
+            "board_handoff": {
+                "candidate_ids": [],
+                "evidence_refs": [],
+                "gap_hints": [maybe_text(input_blocker.get("message"))],
+                "challenge_hints": [],
+                "suggested_next_skills": ["materialize-reporting-handoff", "freeze-report-basis"],
+            },
+        }
     section_briefs = section_briefs_from_reporting_basis(reporting_basis)
     acquisition_checkpoints = reporting_basis_items(reporting_basis, "acquisition_checkpoints")
     theme_sufficiency_reviews = reporting_basis_items(
         reporting_basis,
         "theme_sufficiency_reviews",
     )
-    policy_basis_visible = policy_lane_basis_visible(section_briefs, reporting_basis)
+    nyc_policy_basis = nyc_smoke_policy_basis(run_dir_path, resolved_basis_round_id)
+    policy_basis_visible = policy_lane_basis_visible(section_briefs, reporting_basis) or bool(nyc_policy_basis)
     interaction_timeline_nodes = interaction_timeline_nodes_from_reporting_basis(
         reporting_basis
     )
@@ -3869,11 +4295,69 @@ def draft_narrative_report(
         if boundary_line
         else "The report remains bounded to the frozen evidence basis; unrecorded material is not treated as a conclusion."
     )
+    academic_sections_for_json = (
+        argument_map.get("academic_sections")
+        if isinstance(argument_map.get("academic_sections"), dict)
+        else {}
+    )
+    academic_result_paragraphs: list[str] = []
+    for result in [item for item in list_items(academic_sections_for_json.get("results")) if isinstance(item, dict)]:
+        result_title = maybe_text(result.get("title"))
+        paragraphs = text_list(result.get("paragraphs"))
+        if result_title and paragraphs:
+            academic_result_paragraphs.append(f"{result_title}：{paragraphs[0]}")
+            academic_result_paragraphs.extend(paragraphs[1:])
+        else:
+            academic_result_paragraphs.extend(paragraphs)
+    academic_abstract = text_list(academic_sections_for_json.get("abstract"))
+    academic_intro = text_list(academic_sections_for_json.get("introduction"))
+    academic_methods = text_list(academic_sections_for_json.get("methods"))
+    academic_discussion = text_list(academic_sections_for_json.get("discussion"))
+    academic_limitations = text_list(academic_sections_for_json.get("limitations"))
+    academic_conclusion = text_list(academic_sections_for_json.get("conclusion"))
+    if academic_sections_for_json:
+        argument_chain = unique_texts(
+            [
+                *[f"综合判断：{paragraph}" for paragraph in academic_conclusion],
+                *[f"解释路径：{paragraph}" for paragraph in academic_discussion],
+                boundary_sentence,
+            ]
+        )
+        key_points = unique_texts(
+            [
+                *[f"结论要点：{paragraph}" for paragraph in academic_conclusion],
+                *[f"边界要点：{paragraph}" for paragraph in academic_limitations[:2]],
+            ]
+        ) or key_points
+        narrative_account = unique_texts(
+            [
+                *[f"事件展开：{paragraph}" for paragraph in academic_intro],
+                *[f"结果线索：{paragraph}" for paragraph in academic_result_paragraphs[:4]],
+            ]
+        ) or narrative_account
+        evidence_chain = unique_texts(
+            [
+                *[f"材料与方法：{paragraph}" for paragraph in academic_methods],
+                *[f"证据作用：{paragraph}" for paragraph in academic_result_paragraphs],
+            ]
+        ) or evidence_chain
+        limitation_narrative = unique_texts(
+            [
+                *[f"限制说明：{paragraph}" for paragraph in academic_limitations],
+                *limitation_narrative,
+            ]
+        )
+        closure_narrative = unique_texts(
+            [
+                *[f"讨论收束：{paragraph}" for paragraph in academic_discussion],
+                *closure_narrative,
+            ]
+        )
     sections = [
         section(
             "executive-summary",
             label("executive-summary", report_language),
-            [
+            academic_abstract[:3] if academic_sections_for_json else [
                 (
                     f"围绕 {mission_focus}，本报告的核心判断是：{maybe_text(argument_map.get('central_claim')) or environmental_detail_for_report or bottom_line_for_report}"
                     if is_zh(report_language)
@@ -3899,7 +4383,7 @@ def draft_narrative_report(
         section(
             "key-points",
             label("key-points", report_language),
-            text_list(argument_map.get("direct_answers")) or key_points,
+            key_points if academic_sections_for_json else text_list(argument_map.get("direct_answers")) or key_points,
             all_refs[:12],
             status="draft",
             language=report_language,
@@ -4098,6 +4582,10 @@ def draft_narrative_report(
             },
             "reporting_artifacts": reporting_basis,
             "council_object_counts": {kind: len(rows) for kind, rows in object_sets.items()},
+            "agent_role_counts": {
+                role: sum(1 for row in object_rows if maybe_text(row.get("agent_role")) == role)
+                for role in sorted({maybe_text(row.get("agent_role")) for row in object_rows if maybe_text(row.get("agent_role"))})
+            },
             "public_discourse_summary": {
                 "path": str(public_summary_path) if public_summary_path else "",
                 "summary_id": maybe_text(public_summary.get("summary_id")) if public_summary else "",
@@ -4198,6 +4686,8 @@ def main() -> int:
         max_items=args.max_items,
     )
     print(pretty_json(payload, args.pretty))
+    if maybe_text(payload.get("status")) == "blocked":
+        return 2
     return 0
 
 

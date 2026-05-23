@@ -425,6 +425,41 @@ class DynamicInvestigationObjectTests(unittest.TestCase):
                             object_payload=payload,
                         )
 
+    def test_theme_boundary_plan_derives_time_window_from_temporal_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            record = append_dynamic_investigation_object_record(
+                run_dir,
+                object_kind="theme-evidence-boundary-plan",
+                object_payload={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "object_kind": "theme-evidence-boundary-plan",
+                    "author_role": "social-investigator",
+                    "target_kind": "investigation-theme",
+                    "target_id": "theme-public",
+                    "rationale": "Claim-basis boundary plan, not route plan.",
+                    "theme_id": "theme-public",
+                    "authoring_mode": "agent-authored",
+                    "sample_unit": "official/governance record",
+                    "temporal_scope": "Acute June 2023 NYC smoke episode",
+                    "downgrade_boundary": "examples only",
+                    "claim_slots_supported": ["claim-slot-public"],
+                    "evidence_obligations": ["record sample boundary and basis obligations"],
+                    "success_criteria": ["basis and denominator are visible"],
+                    "denominator_obligations": ["source-local denominator"],
+                    "failure_recovery_plan": ["downgrade or scope out after source-owner recovery note"],
+                    "forbidden_precommitments": ["no route precommitment"],
+                    "evidence_refs": [],
+                    "provenance": {"source": "unit-test"},
+                },
+            )
+        self.assertEqual(
+            "Acute June 2023 NYC smoke episode",
+            record["object"]["time_window"]["label"],
+        )
+        self.assertEqual("temporal_scope", record["object"]["time_window"]["source_field"])
+
     def test_source_acquisition_proposal_is_thin_and_queryable_by_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir) / "run"
@@ -715,6 +750,28 @@ class DynamicInvestigationObjectTests(unittest.TestCase):
                 "link-source-acquisition-execution",
                 executed_surface["commands"]["link_source_acquisition_execution_template"],
             )
+
+    def test_source_acquisition_proposal_treats_false_approval_as_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            record = append_dynamic_investigation_object_record(
+                run_dir,
+                object_kind="source-acquisition-proposal",
+                object_payload={
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "object_kind": "source-acquisition-proposal",
+                    "author_role": "environmental-investigator",
+                    "source_skill": "fetch-open-meteo-historical",
+                    "query_parameters": {"start_date": "2023-06-07"},
+                    "declared_side_effects": ["network-external"],
+                    "requested_side_effect_approvals": ["false"],
+                    "rationale": "Non-executing proposal with no approval requested.",
+                    "evidence_refs": [],
+                    "provenance": {"source": "unit-test"},
+                },
+            )
+        self.assertEqual([], record["object"]["requested_side_effect_approvals"])
 
     def test_source_acquisition_proposal_rejects_wrong_role_for_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

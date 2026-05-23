@@ -188,6 +188,42 @@ def normalized_object_id_values(values: list[Any]) -> list[str]:
     return unique_texts(results)
 
 
+def object_ids_from_evidence_refs(values: list[Any]) -> list[str]:
+    ids: list[str] = []
+    for value in values:
+        text = artifact_ref_text(value)
+        if not text or ":" not in text:
+            continue
+        prefix, suffix = text.split(":", 1)
+        if prefix in {"finding", "finding-record", "evidence-bundle", "proposal", "readiness-opinion"} and suffix:
+            ids.append(suffix)
+    return normalized_object_id_values(ids)
+
+
+def basis_object_ids_from_objects(objects: list[dict[str, Any]]) -> list[str]:
+    values: list[Any] = []
+    for item in objects:
+        if not isinstance(item, dict):
+            continue
+        values.extend(list_items(item.get("basis_object_ids")))
+        values.extend(list_items(item.get("linked_bundle_ids")))
+        values.extend(list_items(item.get("finding_ids")))
+        values.extend(list_items(item.get("lineage")))
+        values.extend(object_ids_from_evidence_refs(list_items(item.get("evidence_refs"))))
+        for field_name in ("finding_id", "bundle_id", "proposal_id", "opinion_id"):
+            value = maybe_text(item.get(field_name))
+            if value:
+                values.append(value)
+        target_kind = maybe_text(item.get("target_kind"))
+        target_id = maybe_text(item.get("target_id"))
+        if target_kind in {"finding", "finding-record", "evidence-bundle"} and target_id:
+            values.append(target_id)
+        target = item.get("target") if isinstance(item.get("target"), dict) else {}
+        if maybe_text(target.get("object_kind")) in {"finding", "finding-record", "evidence-bundle"}:
+            values.append(target.get("object_id"))
+    return normalized_object_id_values(values)
+
+
 def load_round_evidence_bundles(
     run_dir: Path,
     *,
@@ -197,6 +233,23 @@ def load_round_evidence_bundles(
     payload = query_council_objects(
         run_dir,
         object_kind="evidence-bundle",
+        run_id=run_id,
+        round_id=round_id,
+        limit=500,
+    )
+    objects = payload.get("objects", []) if isinstance(payload.get("objects"), list) else []
+    return [item for item in objects if isinstance(item, dict)]
+
+
+def load_round_findings(
+    run_dir: Path,
+    *,
+    run_id: str,
+    round_id: str,
+) -> list[dict[str, Any]]:
+    payload = query_council_objects(
+        run_dir,
+        object_kind="finding",
         run_id=run_id,
         round_id=round_id,
         limit=500,
@@ -271,7 +324,14 @@ def candidate_evidence_refs_from_referenced_bundles(
     candidate_bundle_ids: list[str] = []
     for bundle in evidence_bundles:
         bundle_id = maybe_text(bundle.get("bundle_id")) or maybe_text(bundle.get("object_id"))
-        if not bundle_id or bundle_id not in referenced_bundle_ids:
+        bundle_reference_ids = set(basis_object_ids_from_objects([bundle]))
+        if (
+            not bundle_id
+            or (
+                bundle_id not in referenced_bundle_ids
+                and not bundle_reference_ids.intersection(referenced_bundle_ids)
+            )
+        ):
             continue
         refs = list_items(bundle.get("evidence_refs"))
         if not refs:
@@ -981,6 +1041,19 @@ def freeze_report_basis_skill(
         for opinion in council_opinions
         if maybe_text(opinion.get("opinion_id")) in supporting_opinion_ids
     ]
+    readiness_basis_object_ids = normalized_object_id_values(
+        list_items(readiness.get("selected_basis_object_ids"))
+        + list_items(readiness.get("basis_object_ids"))
+        + object_ids_from_evidence_refs(list_items(readiness.get("evidence_refs")))
+    )
+    council_support_basis_object_ids = basis_object_ids_from_objects(
+        supporting_proposals + supporting_opinions
+    )
+    selected_basis_object_ids = unique_texts(
+        selected_basis_object_ids
+        + readiness_basis_object_ids
+        + council_support_basis_object_ids
+    )
     report_section_drafts = accepted_report_section_drafts(
         load_round_report_section_drafts(
             run_dir_path,
@@ -1077,6 +1150,24 @@ def freeze_report_basis_skill(
         ]
         + report_section_draft_evidence_refs
     )
+    selected_basis_lookup = set(normalized_object_id_values(selected_basis_object_ids))
+    round_findings = load_round_findings(
+        run_dir_path,
+        run_id=run_id,
+        round_id=round_id,
+    )
+    selected_finding_evidence_refs = [
+        ref
+        for finding in round_findings
+        if (
+            maybe_text(finding.get("finding_id")) in selected_basis_lookup
+            or maybe_text(finding.get("object_id")) in selected_basis_lookup
+        )
+        for ref in list_items(finding.get("evidence_refs"))
+    ]
+    selected_evidence_refs = unique_artifact_ref_texts(
+        selected_evidence_refs + selected_finding_evidence_refs
+    )
     bundle_candidates = candidate_evidence_refs_from_referenced_bundles(
         evidence_bundles=load_round_evidence_bundles(
             run_dir_path,
@@ -1091,6 +1182,10 @@ def freeze_report_basis_skill(
     candidate_bundle_evidence_refs = list_items(
         bundle_candidates.get("candidate_bundle_evidence_refs")
     )
+    if report_basis_status == "frozen":
+        selected_evidence_refs = unique_artifact_ref_texts(
+            selected_evidence_refs + candidate_bundle_evidence_refs
+        )
     unselected_candidate_bundle_evidence_refs = [
         ref
         for ref in candidate_bundle_evidence_refs
@@ -1253,7 +1348,7 @@ def freeze_report_basis_skill(
         ),
         "frozen_basis": frozen_basis,
         "selected_coverages": selected_coverages,
-        "evidence_selection_policy": "explicit-agent-council-evidence-refs-only-v1",
+        "evidence_selection_policy": "explicit-council-basis-and-linked-bundle-refs-v2",
         "selected_evidence_refs": selected_evidence_refs,
         "evidence_refs": selected_evidence_refs,
         "challenger_constraint_count": int(
@@ -1392,7 +1487,14 @@ def freeze_report_basis_skill(
                 report_claim_structural_violations
             ),
         },
-        "receipt_id": "report-basis-freeze-receipt-" + stable_hash(SKILL_NAME, run_id, round_id, basis_id)[:20],
+        "receipt_id": "report-basis-freeze-receipt-" + stable_hash(
+            SKILL_NAME,
+            run_id,
+            round_id,
+            basis_id,
+            selected_basis_object_ids,
+            selected_evidence_refs,
+        )[:20],
         "batch_id": "reportbasisfreeze-" + stable_hash(SKILL_NAME, run_id, round_id, output_file.name)[:16],
         "artifact_refs": artifact_refs,
         "canonical_ids": [basis_id],

@@ -66,6 +66,10 @@ python3 scripts/fetch_airnow_hourly_observations.py fetch \
   --pretty
 ```
 
+Use `--bbox=<min_lon,min_lat,max_lon,max_lat>` when the minimum longitude is
+negative. The CLI also accepts the space-separated form, but equals-form avoids
+shell and argparse ambiguity in copied command templates.
+
 ## Output Record Shape
 Each output item in `records` is one site-hour-parameter observation with fields:
 - `aqsid`, `site_name`, `status`, `epa_region`

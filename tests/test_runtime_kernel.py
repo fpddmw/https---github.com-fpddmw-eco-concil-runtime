@@ -353,6 +353,8 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertIn("evidence_ref", proposal_entry["declared_inputs"]["required"])
             self.assertNotIn("Recommended", proposal_entry["declared_inputs"]["required"])
             self.assertIn("response_to_id", proposal_entry["declared_inputs"]["optional"])
+            position_entry = next(item for item in registry["skills"] if item["skill_name"] == "submit-agent-position")
+            self.assertIn("report-editor", position_entry["skill_access"]["allowed_roles"])
 
             payload = run_kernel(
                 "run-skill",
@@ -635,6 +637,55 @@ class RuntimeKernelTests(unittest.TestCase):
             self.assertIn(
                 "store_transition_request requires actor role `moderator`",
                 str(raised.exception),
+            )
+
+    def test_supplemental_transition_request_must_not_occupy_primary_program_round_id(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.governance.transition_requests import (
+                store_transition_request,
+            )
+
+            with self.assertRaises(ValueError) as raised:
+                store_transition_request(
+                    run_dir,
+                    run_id=RUN_ID,
+                    round_id="round-004-public-semantics-acquisition",
+                    transition_kind="open-investigation-round",
+                    requested_by_role="moderator",
+                    target_round_id="round-005-official-public-corpus-strengthening",
+                    source_round_id="round-004-public-semantics-acquisition",
+                    rationale="Request supplemental strengthening.",
+                    request_payload={
+                        "round_mode": "continuation-strengthening",
+                        "round_category": "evidence-acquisition-strengthening",
+                    },
+                )
+
+            self.assertIn(
+                "must not occupy a primary program round id",
+                str(raised.exception),
+            )
+
+            accepted = store_transition_request(
+                run_dir,
+                run_id=RUN_ID,
+                round_id="round-002-fact-official-acquisition",
+                transition_kind="open-investigation-round",
+                requested_by_role="moderator",
+                target_round_id="round-002a-official-action-acquisition-strengthening",
+                source_round_id="round-002-fact-official-acquisition",
+                rationale="Request supplemental strengthening.",
+                request_payload={
+                    "round_mode": "continuation-strengthening",
+                    "round_category": "evidence-acquisition-strengthening",
+                },
+            )
+            self.assertEqual(
+                "round-002a-official-action-acquisition-strengthening",
+                accepted["target_round_id"],
             )
 
     def test_transition_request_approval_rejects_non_operator_role(self) -> None:
@@ -1892,6 +1943,47 @@ with exclusive_runtime_lock(Path(sys.argv[1]), metadata=metadata):
                     "round_id": ROUND_ID,
                     "actor_role": "challenger",
                     "skill_name": "open-challenge-ticket",
+                    "status": "completed",
+                },
+            )
+            after = runtime_health_payload(run_dir, round_id=ROUND_ID)
+
+            self.assertEqual(1, before["summary"]["blocked_event_count"])
+            self.assertEqual("red", before["alert_status"])
+            self.assertEqual(0, after["summary"]["blocked_event_count"])
+            self.assertEqual("green", after["alert_status"])
+
+    def test_runtime_health_ignores_round_close_blocked_event_superseded_by_success(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir) / "run"
+            ensure_runtime_src_on_path()
+
+            from eco_council_runtime.kernel.core.ledger import append_ledger_event
+            from eco_council_runtime.kernel.operator.operations import runtime_health_payload
+
+            round_close_path = str(run_dir / "runtime" / f"round_close_{ROUND_ID}.json")
+            append_ledger_event(
+                run_dir,
+                {
+                    "schema_version": "runtime-event-v3",
+                    "event_id": "runtimeevt-blocked-round-close",
+                    "event_type": "round-close",
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "round_close_path": round_close_path,
+                    "status": "blocked",
+                },
+            )
+            before = runtime_health_payload(run_dir, round_id=ROUND_ID)
+            append_ledger_event(
+                run_dir,
+                {
+                    "schema_version": "runtime-event-v3",
+                    "event_id": "runtimeevt-completed-round-close",
+                    "event_type": "round-close",
+                    "run_id": RUN_ID,
+                    "round_id": ROUND_ID,
+                    "round_close_path": round_close_path,
                     "status": "completed",
                 },
             )

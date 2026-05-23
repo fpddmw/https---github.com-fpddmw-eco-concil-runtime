@@ -22,6 +22,10 @@ It must not name data sources, source families, source skills, query variants, q
 - `round_id`
 - `author_role`
 - `theme_id`
+- `authoring_mode` (`agent-authored` or `agent-adopted`)
+- `sample_unit`
+- `target_kind`
+- `target_id`
 - `claim_slots_supported`
 - `evidence_obligations`
 - `success_criteria`
@@ -31,6 +35,43 @@ It must not name data sources, source families, source skills, query variants, q
 - `downgrade_boundary`
 - Optional:
   - `payload_json`
+  - `temporal_scope`
+  - `time_window` in `payload_json`
+
+The canonical object includes a structured `time_window` dictionary. If
+`payload_json.time_window` is omitted, runtime derives a non-claiming
+`time_window` from `temporal_scope`; if both are absent, runtime records an
+explicit "not specified by author" time-window placeholder. The placeholder is
+only schema metadata and must not be treated as evidence coverage.
+
+When invoking through a shell, use a compact identifier such as
+`official/governance-record` for `sample_unit`, or quote the full value. Unquoted
+multi-word values are parsed as separate CLI arguments and will be rejected
+before any council object is created.
+
+Example:
+
+```bash
+python3 eco-concil-runtime/scripts/eco_runtime_kernel.py run-skill \
+  --run-dir "$RUN_DIR" --run-id "$RUN_ID" --round-id "$ROUND_ID" \
+  --skill-name submit-theme-evidence-boundary-plan \
+  --actor-role social-investigator --contract-mode warn -- \
+  --author-role social-investigator \
+  --authoring-mode agent-authored \
+  --target-kind investigation-theme \
+  --target-id theme-official-policy-action \
+  --theme-id theme-official-policy-action \
+  --sample-unit official/governance-record \
+  --temporal-scope "Acute June 2023 NYC smoke episode" \
+  --claim-slot-supported official-action-record-presence \
+  --evidence-obligation "Record issuer, date, venue, and wording scope." \
+  --success-criterion "Supports only descriptive official-record claims." \
+  --denominator-obligation "Denominator is acquired visible records only." \
+  --failure-recovery-plan "Downgrade to route-specific coverage limitation." \
+  --forbidden-precommitment "Do not infer public uptake or effectiveness." \
+  --downgrade-boundary "No completeness/effectiveness claim from this plan alone." \
+  --rationale "Boundary plan authored by the responsible investigator."
+```
 
 ## Outputs
 
